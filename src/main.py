@@ -27,6 +27,12 @@ class FileOrganizer(QThread):
         self.regex_pattern = regex_pattern
         self.dry_run = dry_run
         self.reverse = reverse
+        # Set up logging
+        self.logger = logging.getLogger('FileOrganizer')
+        self.logger.setLevel(logging.INFO)
+        handler = logging.FileHandler('TNIVO.log')
+        handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+        self.logger.addHandler(handler)
 
     def run(self):
         if self.reverse:
