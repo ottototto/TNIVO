@@ -100,13 +100,19 @@ class FileOrganizer(QThread):
                     if not self.dry_run:
                         os.makedirs(os.path.dirname(destination), exist_ok=True)
                         shutil.move(source, destination)
-                    self.log_signal.emit(f'Moved file: {source} to {destination}')
+                    log_message = f'Moved file: {source} to {destination}'
+                    self.log_signal.emit(log_message)
+                    self.logger.info(log_message)
                 elif action_type == 'remove':
                     if not self.dry_run:
                         os.rmdir(destination)
-                    self.log_signal.emit(f'Removed directory: {destination}')
+                    log_message = f'Removed directory: {destination}'
+                    self.log_signal.emit(log_message)
+                    self.logger.info(log_message)
             except Exception as e:
-                self.log_signal.emit(f'Error executing action {action}: {e}')
+                error_message = f'Error executing action {action}: {e}'
+                self.log_signal.emit(error_message)
+                self.logger.error(error_message)
             finally:
                 completed_actions += 1
                 progress_percentage = int((completed_actions / float(total_actions)) * 100)
