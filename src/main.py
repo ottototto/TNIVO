@@ -1,0 +1,356 @@
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QFont, QIcon
+from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QLabel,
+                             QLineEdit, QProgressBar, QPushButton, QTextEdit, QVBoxLayout,
+                             QWidget,
+                             QToolTip)
+
+
+class FileOrganizer(QThread):
+    progress_signal = pyqtSignal(int)
+    log_signal = pyqtSignal(str)
+
+    def __init__(self, directory, regex_pattern, dry_run, reverse=False):
+        super().__init__()
+        self.directory = directory
+        self.regex_pattern = regex_pattern
+        self.dry_run = dry_run
+        self.reverse = reverse
+
+    def run(self):
+        if self.reverse:
+            self.reverse_organize()
+        else:
+            self.organize()
+
+    def organize(self):
+        actions = self.prepare_actions()
+        with open(self.transaction_log_path(), 'w') as f:
+            json.dump(actions, f)
+        self.execute_actions(actions)
+
+    def reverse_organize(self):
+        actions = self.prepare_reverse_actions()
+        with open(self.transaction_log_path(), 'w') as f:
+            json.dump(actions, f)
+        self.execute_actions(actions)
+
+    def prepare_actions(self):
+        actions = []
+        regex = re.compile(self.regex_pattern)
+        for root, dirs, files in os.walk(self.directory):
+            for name in files:
+                match = regex.search(name)
+                if match:
+                    video_title = match.group(1)
+                    source = os.path.join(root, name)
+                    destination_dir = os.path.join(self.directory, video_title)
+                    destination = os.path.join(destination_dir, name)
+                    actions.append(('move', source, destination))
+        return actions
+
+    def prepare_reverse_actions(self):
+        actions = []
+        for root, dirs, files in os.walk(self.directory, topdown=False):
+            for name in files:
+                if self.directory != root:
+                    source = os.path.join(root, name)
+                    destination = os.path.join(self.directory, name)
+                    actions.append(('move', source, destination))
+            for name in dirs:
+                dir_path = os.path.join(root, name)
+                actions.append(('remove', dir_path))
+        return actions
+
+    def execute_actions(self, actions):
+        total_actions = len(actions)
+        completed_actions = 0
+        for action in actions:
+            try:
+                if len(action) == 3:
+                    action_type, source, destination = action
+                else:
+                    action_type, destination = action
+
+                if action_type == 'move':
+                    if not self.dry_run:
+                        os.makedirs(os.path.dirname(destination), exist_ok=True)
+                        shutil.move(source, destination)
+                    self.log_signal.emit(f'Moved file: {source} to {destination}')
+                elif action_type == 'remove':
+                    if not self.dry_run:
+                        os.rmdir(destination)
+                    self.log_signal.emit(f'Removed directory: {destination}')
+            except Exception as e:
+                self.log_signal.emit(f'Error executing action {action}: {e}')
+            finally:
+                completed_actions += 1
+                progress_percentage = int((completed_actions / float(total_actions)) * 100)
+                self.progress_signal.emit(progress_percentage)
+
+    def transaction_log_path(self):
+        return os.path.join(tempfile.gettempdir(), 'video_organizer_transaction_log.json')
+
+    def rollback(self):
+        try:
+            with open(self.transaction_log_path(), 'r') as f:
+                actions = json.load(f)
+            pass  # Add your code to roll back each action
+        except Exception as e:
+            self.log_signal.emit(f'Error rolling back actions: {e}')
+
+
+class TNIVOrganizer(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.config_file = 'config.json'
+        self.load_config()
+        self.organizer = None
+        self.init_ui()
+        self.apply_theme()
+
+    def load_config(self):
+        try:
+            with open(self.config_file, 'r') as f:
+                self.config = json.load(f)
+        except FileNotFoundError:
+            self.config = {
+                'theme': 'Light',
+                'last_used_directory': '',
+                'regex': 'Default'
+            }
+
+    def save_config(self):
+        with open(self.config_file, 'w') as f:
+            json.dump(self.config, f)
+
+    def init_ui(self):
+        self.setWindowTitle('TNIVO - Totally not involved organizer')
+        self.setGeometry(300, 300, 500, 400)
+
+        QToolTip.setFont(QFont('Arial', 10))
+
+        self.layout = QVBoxLayout()
+
+        self.theme_label = QLabel('Theme:')
+        self.layout.addWidget(self.theme_label)
+
+        self.theme_combo = QComboBox(self)
+        self.theme_combo.addItems(['Light', 'Dark', 'Green'])
+        self.theme_combo.currentIndexChanged.connect(self.apply_theme)
+        self.layout.addWidget(self.theme_combo)
+
+        self.directory_label = QLabel('Directory:')
+        self.layout.addWidget(self.directory_label)
+
+        self.directory_entry = QLineEdit(self)
+        self.directory_entry.setText(self.config.get('last_used_directory', ''))
+        self.layout.addWidget(self.directory_entry)
+
+        self.browse_button = QPushButton(QIcon('icons/browse.png'), 'Browse', self)
+        self.browse_button.clicked.connect(self.browse)
+        self.browse_button.setToolTip('Browse to select the directory containing video files.')
+        self.layout.addWidget(self.browse_button)
+
+        self.regex_label = QLabel('Regex Pattern:')
+        self.layout.addWidget(self.regex_label)
+
+        self.regex_combo = QComboBox(self)
+        self.regex_combo.addItems(['Default', 'Testing'])
+        self.regex_combo.currentIndexChanged.connect(self.update_regex)
+        self.layout.addWidget(self.regex_combo)
+
+        self.regex_entry = QLineEdit(self)
+        self.regex_entry.setText(r'^(.*)\.(mkv|mp4|avi)$')
+        self.layout.addWidget(self.regex_entry)
+
+        self.dry_run_check = QCheckBox('Dry Run', self)
+        self.dry_run_check.setToolTip('Check for a dry run to see what changes would be made without actually making them.')
+        self.layout.addWidget(self.dry_run_check)
+
+        self.reverse_check = QCheckBox('Reverse', self)
+        self.reverse_check.setToolTip('Check to move files back to the main directory and remove empty subdirectories.')
+        self.layout.addWidget(self.reverse_check)
+
+        self.organize_button = QPushButton(QIcon('icons/organize.png'), 'Organize', self)
+        self.organize_button.clicked.connect(self.organize)
+        self.organize_button.setToolTip('Click to organize the video files based on the specified regex pattern.')
+        self.layout.addWidget(self.organize_button)
+
+        self.progress = QProgressBar(self)
+        self.progress_label = QLabel('0% Completed', self)
+        self.layout.addWidget(self.progress)
+        self.layout.addWidget(self.progress_label)
+
+        self.log_text = QTextEdit(self)
+        self.log_text.setToolTip('Log output will be displayed here.')
+        self.layout.addWidget(self.log_text)
+
+        self.clear_log_button = QPushButton(QIcon('icons/clear.png'), 'Clear Log', self)
+        self.clear_log_button.clicked.connect(self.log_text.clear)
+        self.clear_log_button.setToolTip('Click to clear the log.')
+        self.layout.addWidget(self.clear_log_button)
+
+        self.setLayout(self.layout)
+
+    def update_regex(self):
+        if self.regex_combo.currentText() == 'Testing':
+            self.regex_entry.setText(r'\[Test\] (.*?) -')
+        else:
+            self.regex_entry.setText(r'^(?:\[Default\] )?(.*?)( - \d+.*|)\.(mkv|mp4|avi)$')
+
+    def change_theme(self):
+        current_theme = self.theme_combo.currentText()
+        self.config['theme'] = current_theme
+        self.save_config()
+        self.apply_theme()
+
+    def apply_theme(self):
+        current_theme = self.theme_combo.currentText()
+        if current_theme == 'Dark':
+            self.setStyleSheet(self.dark_theme())
+        elif current_theme == 'Green':
+            self.setStyleSheet(self.green_theme())
+        elif current_theme == 'Light':
+            self.setStyleSheet(self.white_theme())
+        else:
+            self.setStyleSheet("")
+
+    def browse(self):
+        directory = QFileDialog.getExistingDirectory(self, "Select Directory")
+        if directory:
+            self.directory_entry.setText(directory)
+            self.config['last_used_directory'] = directory
+            self.save_config()
+
+    def organize(self):
+        if self.organizer is not None and self.organizer.isRunning():
+            self.organizer.terminate()
+            self.organizer.wait()
+
+        try:
+            self.organizer = FileOrganizer(
+                self.directory_entry.text(),
+                self.regex_entry.text(),
+                self.dry_run_check.isChecked(),
+                reverse=self.reverse_check.isChecked()
+            )
+            self.organizer.progress_signal.connect(self.update_progress)
+            self.organizer.log_signal.connect(self.log_text.append)
+            self.organizer.start()
+        except Exception as e:
+            self.log_text.append(f'Error starting organizer: {e}')
+            self.log_to_file(f'Error starting organizer: {e}')
+
+    def update_progress(self, value):
+        self.progress.setValue(value)
+
+    def log_to_file(self, message):
+        with open('organizer.log', 'a') as f:
+            f.write(f'{message}\n')
+
+    def dark_theme(self):
+        return """
+            QWidget {
+                background-color: #2e2e2e;
+                color: #ffffff;
+            }
+            QPushButton {
+                background-color: #555555;
+                border: none;
+                color: white;
+                padding: 10px;
+                text-align: center;
+                text-decoration: none;
+                font-size: 16px;
+                margin: 4px 2px;
+                border-radius: 12px;
+            }
+            QPushButton:hover {
+                background-color: #3e8e41;
+            }
+            QProgressBar {
+                border: 2px solid #555555;
+                border-radius: 5px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #3e8e41;
+                width: 20px;
+            }
+        """
+
+    def green_theme(self):
+        return """
+            QWidget {
+                background-color: #dbffd6;
+                color: #2e2e2e;
+            }
+            QPushButton {
+                background-color: #89c997;
+                border: none;
+                color: white;
+                padding: 10px;
+                text-align: center;
+                text-decoration: none;
+                font-size: 16px;
+                margin: 4px 2px;
+                border-radius: 12px;
+            }
+            QPushButton:hover {
+                background-color: #3e8e41;
+            }
+            QProgressBar {
+                border: 2px solid #89c997;
+                border-radius: 5px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #3e8e41;
+                width: 20px;
+            }
+        """
+    
+    def white_theme(self):
+        return """
+        QWidget {
+            background-color: #F5F5F5;
+            color: #000000;
+        }
+        QPushButton {
+            background-color: #2196F3; /* professional blue */
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            font-size: 14px;
+            margin: 4px 2px;
+            border-radius: 5px; /* rounded corners */
+        }
+        QPushButton:hover {
+            background-color: #1976D2; /* darker blue on hover */
+        }
+        QProgressBar {
+            border: 2px solid #2196F3;
+            border-radius: 5px;
+            text-align: center;
+        }
+        QProgressBar::chunk {
+            background-color: #2196F3;
+            width: 10px;
+            margin: 0.5px;
+        }
+        """
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    ex = TNIVOrganizer()
+    ex.show()
+    sys.exit(app.exec_())
