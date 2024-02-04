@@ -4,6 +4,7 @@ import re
 import shutil
 import sys
 import tempfile
+import logging
 import tkinter as tk
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon
@@ -13,6 +14,8 @@ from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QL
                              QToolTip)
 from tkinter import messagebox
 
+# Set up logging
+logging.basicConfig(filename='tnivo.log', level=logging.INFO, format='%(asctime)s %(message)s')
 
 class FileOrganizer(QThread):
     progress_signal = pyqtSignal(int)
