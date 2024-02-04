@@ -35,10 +35,26 @@ class FileOrganizer(QThread):
             self.organize()
 
     def organize(self):
-        actions = self.prepare_actions()
-        with open(self.transaction_log_path(), 'w') as f:
-            json.dump(actions, f)
-        self.execute_actions(actions)
+        if self.organizer is not None and self.organizer.isRunning():
+            self.organizer.terminate()
+            self.organizer.wait()
+
+        try:
+            self.organizer = FileOrganizer(
+                self.directory_entry.text(),
+                self.regex_entry.text(),
+                self.dry_run_check.isChecked(),
+                reverse=self.reverse_check.isChecked()
+            )
+            self.organizer.progress_signal.connect(self.update_progress)
+            self.organizer.log_signal.connect(self.log_text.append)
+            self.organizer.log_signal.connect(lambda message: logging.info(message))  # Log the message
+            self.organizer.start()
+        except Exception as e:
+            error_message = f'Error starting organizer: {e}'
+            self.log_text.append(error_message)
+            self.log_to_file(error_message)
+            logging.error(error_message)  # Log the error
 
     def reverse_organize(self):
         actions = self.prepare_reverse_actions()
