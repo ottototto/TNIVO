@@ -5,6 +5,7 @@ import shutil
 import sys
 import tempfile
 import logging
+import datetime
 import tkinter as tk
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon
@@ -66,9 +67,9 @@ class FileOrganizer(QThread):
             for name in files:
                 match = regex.search(name)
                 if match and len(match.groups()) > 0:
-                    video_title = match.group(1)
+                    filename = match.group(1)
                     source = os.path.join(root, name)
-                    destination_dir = os.path.join(self.directory, video_title)
+                    destination_dir = os.path.join(self.directory, filename)
                     destination = os.path.join(destination_dir, name)
                     actions.append(('move', source, destination))
         return actions
@@ -85,6 +86,9 @@ class FileOrganizer(QThread):
                 dir_path = os.path.join(root, name)
                 actions.append(('remove', dir_path))
         return actions
+    
+    def transaction_log_path(self):
+        return 'TNIVO.log'
 
     def execute_actions(self, actions):
         total_actions = len(actions)
@@ -102,13 +106,15 @@ class FileOrganizer(QThread):
                         shutil.move(source, destination)
                     log_message = f'Moved file: {source} to {destination}'
                     self.log_signal.emit(log_message)
-                    self.logger.info(log_message)
+                    log_entry = {'action': 'move', 'source': source, 'destination': destination, 'timestamp': str(datetime.datetime.now())}
+                    self.logger.info(json.dumps(log_entry))
                 elif action_type == 'remove':
                     if not self.dry_run:
                         os.rmdir(destination)
                     log_message = f'Removed directory: {destination}'
                     self.log_signal.emit(log_message)
-                    self.logger.info(log_message)
+                    log_entry = {'action': 'remove', 'destination': destination, 'timestamp': str(datetime.datetime.now())}
+                    self.logger.info(json.dumps(log_entry))
             except Exception as e:
                 error_message = f'Error executing action {action}: {e}'
                 self.log_signal.emit(error_message)
@@ -118,16 +124,27 @@ class FileOrganizer(QThread):
                 progress_percentage = int((completed_actions / float(total_actions)) * 100)
                 self.progress_signal.emit(progress_percentage)
 
-    def transaction_log_path(self):
-        return os.path.join(tempfile.gettempdir(), 'video_organizer_transaction_log.json')
-
     def rollback(self):
         try:
-            with open(self.transaction_log_path(), 'r') as f:
-                actions = json.load(f)
-            pass  # Add your code to roll back each action
+            with open('TNIVO.log', 'r') as f:
+                log_entries = f.readlines()
+            # Reverse the order of log entries to rollback in reverse order
+            log_entries.reverse()
+            for line in log_entries:
+                log_entry = json.loads(line)
+                if log_entry['action'] == 'move':
+                    if os.path.exists(log_entry['destination']):
+                        shutil.move(log_entry['destination'], log_entry['source'])
+                    else:
+                        self.logger.error(f"File {log_entry['destination']} not found. Cannot rollback this action.")
+                elif log_entry['action'] == 'remove':
+                    if not os.path.exists(log_entry['destination']):
+                        os.makedirs(log_entry['destination'], exist_ok=True)
+                    else:
+                        self.logger.error(f"Directory {log_entry['destination']} already exists. Cannot rollback this action.")
         except Exception as e:
             self.log_signal.emit(f'Error rolling back actions: {e}')
+            self.logger.error(f'Error rolling back actions: {e}')
 
 
 class TNIVOrganizer(QWidget):
@@ -137,7 +154,22 @@ class TNIVOrganizer(QWidget):
         self.load_config()
         self.organizer = None
         self.init_ui()
+        self.apply_theme_from_config()
         self.apply_theme()
+        self.update_regex_from_config()
+
+    def apply_theme_from_config(self):
+        theme = self.config.get('theme', 'Light')
+        index = self.theme_combo.findText(theme)
+        if index != -1:
+            self.theme_combo.setCurrentIndex(index)
+            self.apply_theme()
+
+    def update_regex_from_config(self):
+        regex = self.config.get('regex', 'Default')
+        index = self.regex_combo.findText(regex)
+        if index != -1:
+            self.regex_combo.setCurrentIndex(index)
 
     def load_config(self):
         try:
@@ -179,7 +211,7 @@ class TNIVOrganizer(QWidget):
 
         self.browse_button = QPushButton(QIcon('icons/browse.png'), 'Browse', self)
         self.browse_button.clicked.connect(self.browse)
-        self.browse_button.setToolTip('Browse to select the directory containing video files.')
+        self.browse_button.setToolTip('Browse to select the directory containing the files you want to organize into folders.')
         self.layout.addWidget(self.browse_button)
 
         self.regex_label = QLabel('Regex Pattern:')
@@ -204,7 +236,7 @@ class TNIVOrganizer(QWidget):
 
         self.organize_button = QPushButton(QIcon('icons/organize.png'), 'Organize', self)
         self.organize_button.clicked.connect(self.organize)
-        self.organize_button.setToolTip('Click to organize the video files based on the specified regex pattern.')
+        self.organize_button.setToolTip('Click to organize the files based on the specified regex pattern.')
         self.layout.addWidget(self.organize_button)
 
         self.progress = QProgressBar(self)
@@ -237,6 +269,9 @@ class TNIVOrganizer(QWidget):
 
     def apply_theme(self):
         current_theme = self.theme_combo.currentText()
+        self.config['theme'] = current_theme
+        self.save_config()
+
         if current_theme == 'Dark':
             self.setStyleSheet(self.dark_theme())
         elif current_theme == 'Green':

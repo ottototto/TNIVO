@@ -37,7 +37,7 @@ python src/main.py
 
 ## Usage
 
-## Using Regular Expressions with TNIVO
+## Organize using Regular Expressions with TNIVO
 
 TNIVO allows you to use regular expressions (regex) to filter and organize your files. Regular expressions are a powerful tool for matching patterns in text, which makes them ideal for tasks like this.
 
@@ -54,6 +54,21 @@ Here's a basic guide on how to use them in our application:
    - `mp4` is the exact text we want to match at the end of the file name.
    - `$` denotes the end of the line.
 
-3. **Apply the filter**: After entering your regex, apply the filter. The application will then organize your video files based on the matches.
+3. **Apply the filter**: After entering your regex, you can click Organize and the application will then organize your files based on the matches.
 
 Remember, regular expressions are very powerful, but they can also be quite complex. Make sure to test your regular expression before applying it to your video files.
+
+
+## Revert changes
+
+If you wish to revert changes made by TNIVO, you can click the "Reverse" selection active and click "Organize". This will revert previous actions made by TNIVO. 
+**IMPORTANT** -- Revert uses the tnivo.log file to see what changes were made so **do not** delete it unless you're completely certain everything is alright. 
+
+## Contributing
+
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+
+## License
+
+[MIT](LICENSE)
+```
