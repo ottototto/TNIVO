@@ -4,12 +4,14 @@ import re
 import shutil
 import sys
 import tempfile
+import tkinter as tk
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QLabel,
                              QLineEdit, QProgressBar, QPushButton, QTextEdit, QVBoxLayout,
                              QWidget,
                              QToolTip)
+from tkinter import messagebox
 
 
 class FileOrganizer(QThread):
@@ -43,11 +45,18 @@ class FileOrganizer(QThread):
 
     def prepare_actions(self):
         actions = []
+        if not self.regex_pattern:
+            root = tk.Tk()
+            root.withdraw()  # hides the main window
+            messagebox.showerror("Error", "Regex pattern cannot be empty.")
+            root.destroy()  # destroys the main window
+            return actions
+
         regex = re.compile(self.regex_pattern)
         for root, dirs, files in os.walk(self.directory):
             for name in files:
                 match = regex.search(name)
-                if match:
+                if match and len(match.groups()) > 0:
                     video_title = match.group(1)
                     source = os.path.join(root, name)
                     destination_dir = os.path.join(self.directory, video_title)
@@ -162,12 +171,12 @@ class TNIVOrganizer(QWidget):
         self.layout.addWidget(self.regex_label)
 
         self.regex_combo = QComboBox(self)
-        self.regex_combo.addItems(['Default', 'Testing'])
+        self.regex_combo.addItems(['Default'])
         self.regex_combo.currentIndexChanged.connect(self.update_regex)
         self.layout.addWidget(self.regex_combo)
 
         self.regex_entry = QLineEdit(self)
-        self.regex_entry.setText(r'^(.*)\.(mkv|mp4|avi)$')
+        self.regex_entry.setText(r'^(.*)\.(mkv|mp4|avi|mov|wmv|flv|webm|ogv|mpg|m4v|3gp|f4v|mpeg|vob|rm|rmvb|asf|dat|mts|m2ts|ts)$')
         self.layout.addWidget(self.regex_entry)
 
         self.dry_run_check = QCheckBox('Dry Run', self)
@@ -200,10 +209,10 @@ class TNIVOrganizer(QWidget):
         self.setLayout(self.layout)
 
     def update_regex(self):
-        if self.regex_combo.currentText() == 'Testing':
-            self.regex_entry.setText(r'\[Test\] (.*?) -')
+        if self.regex_combo.currentText() == 'Default':
+            self.regex_edit.setText(r'^(?:\[Default\] )?(.*?)( - \d+.*|)\.(mkv|mp4|avi)$')
         else:
-            self.regex_entry.setText(r'^(?:\[Default\] )?(.*?)( - \d+.*|)\.(mkv|mp4|avi)$')
+            self.regex_edit.setText('')
 
     def change_theme(self):
         current_theme = self.theme_combo.currentText()
