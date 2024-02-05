@@ -3,17 +3,14 @@ import os
 import re
 import shutil
 import sys
-import tempfile
 import logging
 import datetime
-import tkinter as tk
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QLabel,
                              QLineEdit, QProgressBar, QPushButton, QTextEdit, QVBoxLayout,
                              QWidget,
                              QToolTip,QMessageBox)
-from tkinter import messagebox
 
 # Set up logging
 logging.basicConfig(filename='tnivo.log', level=logging.INFO, format='%(asctime)s %(message)s')
@@ -36,10 +33,22 @@ class FileOrganizer(QThread):
         self.logger.addHandler(handler)
 
     def run(self):
-        if self.reverse:
+        if self.dry_run:
+            self.preview_organize()
+        elif self.reverse:
             self.reverse_organize()
         else:
             self.organize()
+
+    def preview_organize(self):
+        actions = self.prepare_actions()
+        preview_message = "Dry run activated. Below are the actions that would be performed:"
+        self.log_signal.emit(preview_message)
+        for action in actions:
+            if action[0] == 'move':
+                self.log_signal.emit(f'{preview_message.split()[0]}: Move {action[1]} to {action[2]}')
+            elif action[0] == 'remove':
+                self.log_signal.emit(f'{preview_message.split()[0]}: Remove {action[1]}')
 
     def organize(self):
         actions = self.prepare_actions()
@@ -56,10 +65,7 @@ class FileOrganizer(QThread):
     def prepare_actions(self):
         actions = []
         if not self.regex_pattern:
-            root = tk.Tk()
-            root.withdraw()  # hides the main window
-            messagebox.showerror("Error", "Regex pattern cannot be empty.")
-            root.destroy()  # destroys the main window
+            QMessageBox.critical(None, "Error", "Regex pattern cannot be empty.")
             return actions
 
         regex = re.compile(self.regex_pattern)
@@ -118,7 +124,7 @@ class FileOrganizer(QThread):
             except Exception as e:
                 error_message = f'Error executing action {action}: {e}'
                 self.log_signal.emit(error_message)
-                self.logger.error(error_message)
+                self.logger.error(error_message, exc_info=True)
             finally:
                 completed_actions += 1
                 progress_percentage = int((completed_actions / float(total_actions)) * 100)
@@ -144,12 +150,14 @@ class FileOrganizer(QThread):
                         self.logger.error(f"Directory {log_entry['destination']} already exists. Cannot rollback this action.")
         except Exception as e:
             self.log_signal.emit(f'Error rolling back actions: {e}')
-            self.logger.error(f'Error rolling back actions: {e}')
-
+            self.logger.error(f'Error rolling back actions: {e}', exc_info=True)
+    
 
 class TNIVOrganizer(QWidget):
     def __init__(self):
         super().__init__()
+        icon_path = self.resource_path(os.path.join('assets', 'TNIVO.png'))  # Use self to call the method
+        self.setWindowIcon(QIcon(icon_path))
         self.organizer = None
         self.config_file = 'config.json'
         self.load_config()  # Load the config first
@@ -158,6 +166,16 @@ class TNIVOrganizer(QWidget):
         self.apply_theme_from_config()
         self.apply_theme()
         self.update_regex_from_config()
+
+    def resource_path(self, relative_path):
+        """ Get absolute path to resource, works for dev and for PyInstaller """
+        try:
+            # PyInstaller creates a temp folder and stores path in _MEIPASS
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.abspath(".")
+
+        return os.path.join(base_path, relative_path)
 
     def apply_theme_from_config(self):
         theme = self.config.get('theme', 'Light')
@@ -319,7 +337,7 @@ class TNIVOrganizer(QWidget):
         self.layout.addWidget(self.progress_label)
 
         self.log_text = QTextEdit(self)
-        self.log_text.setToolTip('Log output will be displayed here.')
+        self.log_text.setToolTip('Log output will be displayed here. Actions will also appear here if Dry Run is selected.')
         self.layout.addWidget(self.log_text)
 
         self.clear_log_button = QPushButton(QIcon('icons/clear.png'), 'Clear Log', self)
@@ -392,95 +410,103 @@ class TNIVOrganizer(QWidget):
     def dark_theme(self):
         return """
             QWidget {
-                background-color: #2e2e2e;
-                color: #ffffff;
+                background-color: #333;
+                color: #EEE;
+            }
+            QPushButton, QCheckBox, QComboBox, QLineEdit, QProgressBar, QTextEdit {
+                border: 1px solid #555;
+                padding: 5px;
+                margin: 5px;
+                border-radius: 5px;
             }
             QPushButton {
-                background-color: #555555;
-                border: none;
-                color: white;
-                padding: 10px;
-                text-align: center;
-                text-decoration: none;
-                font-size: 16px;
-                margin: 4px 2px;
-                border-radius: 12px;
+                background-color: #555;
+                color: #EEE;
             }
             QPushButton:hover {
-                background-color: #3e8e41;
+                background-color: #777;
             }
             QProgressBar {
-                border: 2px solid #555555;
+                border: 2px solid #555;
                 border-radius: 5px;
                 text-align: center;
             }
             QProgressBar::chunk {
-                background-color: #3e8e41;
+                background-color: #777;
                 width: 20px;
+            }
+            QTextEdit {
+                background-color: #222;
+                color: #EEE;
             }
         """
 
     def green_theme(self):
         return """
             QWidget {
-                background-color: #dbffd6;
-                color: #2e2e2e;
+                background-color: #E8F5E9;
+                color: #256029;
+            }
+            QPushButton, QCheckBox, QComboBox, QLineEdit, QProgressBar, QTextEdit {
+                border: 1px solid #A5D6A7;
+                padding: 5px;
+                margin: 5px;
+                border-radius: 5px;
             }
             QPushButton {
-                background-color: #89c997;
-                border: none;
-                color: white;
-                padding: 10px;
-                text-align: center;
-                text-decoration: none;
-                font-size: 16px;
-                margin: 4px 2px;
-                border-radius: 12px;
+                background-color: #A5D6A7;
+                color: #256029;
             }
             QPushButton:hover {
-                background-color: #3e8e41;
+                background-color: #81C784;
             }
             QProgressBar {
-                border: 2px solid #89c997;
+                border: 2px solid #A5D6A7;
                 border-radius: 5px;
                 text-align: center;
             }
             QProgressBar::chunk {
-                background-color: #3e8e41;
+                background-color: #81C784;
                 width: 20px;
+            }
+            QTextEdit {
+                background-color: #C8E6C9;
+                color: #256029;
             }
         """
     
     def white_theme(self):
         return """
-        QWidget {
-            background-color: #F5F5F5;
-            color: #000000;
-        }
-        QPushButton {
-            background-color: #2196F3; /* professional blue */
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            text-align: center;
-            text-decoration: none;
-            font-size: 14px;
-            margin: 4px 2px;
-            border-radius: 5px; /* rounded corners */
-        }
-        QPushButton:hover {
-            background-color: #1976D2; /* darker blue on hover */
-        }
-        QProgressBar {
-            border: 2px solid #2196F3;
-            border-radius: 5px;
-            text-align: center;
-        }
-        QProgressBar::chunk {
-            background-color: #2196F3;
-            width: 10px;
-            margin: 0.5px;
-        }
+            QWidget {
+                background-color: #FFF;
+                color: #000;
+            }
+            QPushButton, QCheckBox, QComboBox, QLineEdit, QProgressBar, QTextEdit {
+                border: 1px solid #CCC;
+                padding: 5px;
+                margin: 5px;
+                border-radius: 5px;
+            }
+            QPushButton {
+                background-color: #EEE;
+                color: #000;
+            }
+            QPushButton:hover {
+                background-color: #DDD;
+            }
+            QProgressBar {
+                border: 2px solid #CCC;
+                border-radius: 5px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #DDD;
+                width: 20px;
+            }
+            QTextEdit {
+                background-color: #EEE;
+                color: #000;
+            }
         """
 
 if __name__ == '__main__':
@@ -488,3 +514,4 @@ if __name__ == '__main__':
     ex = TNIVOrganizer()
     ex.show()
     sys.exit(app.exec_())
+
