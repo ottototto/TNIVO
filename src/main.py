@@ -18,12 +18,13 @@ class FileOrganizer(QThread):
     progress_signal = pyqtSignal(int)
     log_signal = pyqtSignal(str)
 
-    def __init__(self, directory, regex_pattern, dry_run, reverse=False):
+    def __init__(self, directory, regex_pattern, dry_run, reverse=False, organize_inside_folders=False):
         super().__init__()
         self.directory = directory
         self.regex_pattern = regex_pattern
         self.dry_run = dry_run
         self.reverse = reverse
+        self.organize_inside_folders = organize_inside_folders
         # Set up logging
         self.logger = logging.getLogger('FileOrganizer')
         self.logger.setLevel(logging.INFO)
@@ -69,14 +70,15 @@ class FileOrganizer(QThread):
 
         regex = re.compile(self.regex_pattern)
         for root, dirs, files in os.walk(self.directory):
-            for name in files:
-                match = regex.search(name)
-                if match and len(match.groups()) > 0:
-                    filename = match.group(1)
-                    source = os.path.join(root, name)
-                    destination_dir = os.path.join(self.directory, filename)
-                    destination = os.path.join(destination_dir, name)
-                    actions.append(('move', source, destination))
+            if root == self.directory or self.organize_inside_folders:
+                for name in files:
+                    match = regex.search(name)
+                    if match and len(match.groups()) > 0:
+                        filename = match.group(1)
+                        source = os.path.join(root, name)
+                        destination_dir = os.path.join(self.directory, filename)
+                        destination = os.path.join(destination_dir, name)
+                        actions.append(('move', source, destination))
         return actions
 
     def prepare_reverse_actions(self):
@@ -265,6 +267,25 @@ class TNIVOrganizer(QWidget):
         # Add new profile to regex_combo
         self.regex_combo.addItem(profile_name)
 
+    def remove_profile(self):
+        profile_name = self.regex_combo.currentText()
+
+        # Confirm removal
+        reply = QMessageBox.question(self, 'Remove Profile', f'Are you sure you want to remove the profile "{profile_name}"?',
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            # Remove the profile from the config
+            self.config['regex_profiles'] = [profile for profile in self.config['regex_profiles'] if profile['name'] != profile_name]
+            self.save_config()  # Save the updated config
+
+            # Remove the profile from regex_combo
+            index = self.regex_combo.findText(profile_name)
+            if index != -1:
+                self.regex_combo.removeItem(index)
+
+            QMessageBox.information(self, "Profile Removed", "Regex profile removed.")
+
     def init_ui(self):
         self.setWindowTitle('TNIVO - Totally not involved organizer')
         self.setGeometry(300, 300, 500, 400)
@@ -321,6 +342,11 @@ class TNIVOrganizer(QWidget):
         self.save_button.setToolTip('Save the current regex as a new profile for future use.')
         self.bottomLayout.addWidget(self.save_button)
 
+        self.remove_button = QPushButton('Remove', self)
+        self.remove_button.clicked.connect(self.remove_profile)
+        self.remove_button.setToolTip('Remove the currently selected regex profile.')
+        self.bottomLayout.addWidget(self.remove_button)
+
         self.dry_run_check = QCheckBox('Dry Run', self)
         self.dry_run_check.setToolTip('Check for a dry run to see what changes would be made without actually making them.')
         self.bottomLayout.addWidget(self.dry_run_check)
@@ -328,6 +354,10 @@ class TNIVOrganizer(QWidget):
         self.reverse_check = QCheckBox('Reverse', self)
         self.reverse_check.setToolTip('Check to move files back to the main directory and remove empty subdirectories.')
         self.bottomLayout.addWidget(self.reverse_check)
+
+        self.organize_inside_folders_check = QCheckBox('Organize inside folders', self)
+        self.organize_inside_folders_check.setToolTip('Check this if you want the organizer to organize files inside subdirectories')
+        self.bottomLayout.addWidget(self.organize_inside_folders_check)
 
         self.organize_button = QPushButton(QIcon('icons/organize.png'), 'Organize', self)
         self.organize_button.clicked.connect(self.organize)
@@ -408,7 +438,8 @@ class TNIVOrganizer(QWidget):
                 self.directory_entry.text(),
                 self.regex_entry.text(),
                 self.dry_run_check.isChecked(),
-                reverse=self.reverse_check.isChecked()
+                reverse=self.reverse_check.isChecked(),
+                organize_inside_folders=self.organize_inside_folders_check.isChecked()
             )
             self.organizer.progress_signal.connect(self.update_progress)
             self.organizer.log_signal.connect(self.log_text.append)
