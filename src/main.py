@@ -6,11 +6,10 @@ import sys
 import logging
 import datetime
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QFont, QIcon
+from PyQt5.QtGui import QFont, QIcon, QKeySequence
 from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QLabel,
                              QLineEdit, QProgressBar, QPushButton, QTextEdit, QVBoxLayout,
-                             QWidget,
-                             QToolTip,QMessageBox)
+                             QWidget, QAction, QToolTip, QMessageBox, QHBoxLayout)
 
 # Set up logging
 logging.basicConfig(filename='tnivo.log', level=logging.INFO, format='%(asctime)s %(message)s')
@@ -272,80 +271,98 @@ class TNIVOrganizer(QWidget):
 
         QToolTip.setFont(QFont('Arial', 10))
 
-        self.layout = QVBoxLayout()
+        self.mainLayout = QVBoxLayout()
+
+        self.topLayout = QHBoxLayout()
+        self.bottomLayout = QVBoxLayout()
 
         self.theme_label = QLabel('Theme:')
-        self.layout.addWidget(self.theme_label)
+        self.topLayout.addWidget(self.theme_label)
 
         self.theme_combo = QComboBox(self)
         self.theme_combo.addItems(['Light', 'Dark', 'Green'])
         self.theme_combo.currentIndexChanged.connect(self.apply_theme)
-        self.layout.addWidget(self.theme_combo)
+        self.topLayout.addWidget(self.theme_combo)
 
         self.directory_label = QLabel('Directory:')
-        self.layout.addWidget(self.directory_label)
+        self.topLayout.addWidget(self.directory_label)
 
         self.directory_entry = QLineEdit(self)
         self.directory_entry.setText(self.config.get('last_used_directory', ''))        
-        self.layout.addWidget(self.directory_entry)
+        self.topLayout.addWidget(self.directory_entry)
 
         self.browse_button = QPushButton(QIcon('icons/browse.png'), 'Browse', self)
         self.browse_button.clicked.connect(self.browse)
         self.browse_button.setToolTip('Browse to select the directory containing the files you want to organize into folders.')
-        self.layout.addWidget(self.browse_button)
+        self.topLayout.addWidget(self.browse_button)
 
         self.regex_label = QLabel('Regex Pattern:')
-        self.layout.addWidget(self.regex_label)
+        self.bottomLayout.addWidget(self.regex_label)
 
         self.regex_combo = QComboBox(self)
         self.regex_combo.addItems(['Default'])
         self.regex_combo.currentIndexChanged.connect(self.update_regex)
-        self.layout.addWidget(self.regex_combo)
+        self.bottomLayout.addWidget(self.regex_combo)
         self.regex_combo.currentIndexChanged.connect(self.update_regex_entry)
 
         self.regex_entry = QLineEdit(self)
         self.regex_entry.setText(r'^(.*)\..*$')
-        self.layout.addWidget(self.regex_entry)
+        self.bottomLayout.addWidget(self.regex_entry)
 
         self.profile_name_label = QLabel('Profile Name:')
-        self.layout.addWidget(self.profile_name_label)
+        self.bottomLayout.addWidget(self.profile_name_label)
 
         self.profile_name_entry = QLineEdit(self)
         self.profile_name_entry.setToolTip('If you want to save regex for later use, you can write a name for the profile here')
-        self.layout.addWidget(self.profile_name_entry)
+        self.bottomLayout.addWidget(self.profile_name_entry)
 
         self.save_button = QPushButton('Save', self)
         self.save_button.clicked.connect(self.save_profile)
-        self.layout.addWidget(self.save_button)
+        self.save_button.setToolTip('Save the current regex as a new profile for future use.')
+        self.bottomLayout.addWidget(self.save_button)
 
         self.dry_run_check = QCheckBox('Dry Run', self)
         self.dry_run_check.setToolTip('Check for a dry run to see what changes would be made without actually making them.')
-        self.layout.addWidget(self.dry_run_check)
+        self.bottomLayout.addWidget(self.dry_run_check)
 
         self.reverse_check = QCheckBox('Reverse', self)
         self.reverse_check.setToolTip('Check to move files back to the main directory and remove empty subdirectories.')
-        self.layout.addWidget(self.reverse_check)
+        self.bottomLayout.addWidget(self.reverse_check)
 
         self.organize_button = QPushButton(QIcon('icons/organize.png'), 'Organize', self)
         self.organize_button.clicked.connect(self.organize)
         self.organize_button.setToolTip('Click to organize the files based on the specified regex pattern.')
-        self.layout.addWidget(self.organize_button)
+        self.bottomLayout.addWidget(self.organize_button)
 
         self.progress = QProgressBar(self)
+        self.bottomLayout.addWidget(self.progress)  # Added QProgressBar to the layout as per instructions
+
         self.progress_label = QLabel('0% Completed', self)
-        self.layout.addWidget(self.progress)
-        self.layout.addWidget(self.progress_label)
+        self.bottomLayout.addWidget(self.progress_label)
 
         self.log_text = QTextEdit(self)
         self.log_text.setToolTip('Log output will be displayed here. Actions will also appear here if Dry Run is selected.')
-        self.layout.addWidget(self.log_text)
+        self.bottomLayout.addWidget(self.log_text)
 
         self.clear_log_button = QPushButton(QIcon('icons/clear.png'), 'Clear Log', self)
         self.clear_log_button.clicked.connect(self.log_text.clear)
         self.clear_log_button.setToolTip('Click to clear the log.')
-        self.layout.addWidget(self.clear_log_button)
+        self.bottomLayout.addWidget(self.clear_log_button)
 
-        self.setLayout(self.layout)
+        # Adding shortcut keys
+        self.saveAction = QAction('Save', self)
+        self.saveAction.setShortcut(QKeySequence.Save)
+        self.saveAction.triggered.connect(self.save_profile)
+        self.addAction(self.saveAction)
+
+        self.openAction = QAction('Open', self)
+        self.openAction.setShortcut(QKeySequence.Open)
+        self.openAction.triggered.connect(self.browse)
+        self.addAction(self.openAction)
+
+        self.mainLayout.addLayout(self.topLayout)
+        self.mainLayout.addLayout(self.bottomLayout)
+        self.setLayout(self.mainLayout)
 
     def update_regex(self):
         self.regex_entry.setText('')
