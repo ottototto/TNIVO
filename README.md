@@ -2,19 +2,47 @@
 
 TNIVO is a powerful and easy-to-use file organizer. It helps you manage your files efficiently and easily with a user-friendly interface.
 
+
+# Table of Contents
+1. [Features](#Features)
+2. [Getting Started](#installation)
+3. [How to Use](#Usage)
+4. [Contributing](#contributing)
+5. [License](#license)
+
 ## Features
 
-- Organize your files based on file type
-- Easy to use drag and drop interface
-- Search functionality to easily locate your files
-- Supports various file types: documents, images, audio, video, etc.
+### Directory Selection
+Users can select a directory whose files they want to organize. This allows for targeted file organization within specific folders.
+
+### Regular Expression Pattern
+Users can input a regular expression pattern to match file names. Files with names that match the pattern will be moved into a subdirectory named after the first group in the pattern. This provides a flexible way to categorize and organize files.
+
+### Dry Run
+Users can perform a dry run to see what changes would be made without actually making them. This feature provides a safety net to prevent unwanted file organization.
+
+### Reverse
+Users can move files back to the main directory and remove empty subdirectories. This feature allows users to undo the file organization if needed.
+
+### Progress Bar
+The application displays a progress bar to show the progress of the file organization process. This gives users a visual representation of the task progress.
+
+### Log Display
+The application displays a log of the actions it takes. This provides a detailed record of the file organization process for auditing purposes.
+
+### Theme Selection
+Users can select a theme for the application. There are three themes available: Dark, Green, and Light. This feature allows users to customize the look and feel of the application.
+
+### Regex Profiles
+Users can save and load regular expression profiles for later use. This feature allows users to reuse regular expression patterns, saving time and effort in inputting complex patterns.
+
 
 ## Installation
 
 Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/TNIVO.git
+git clone https://github.com/ottototto/TNIVO.git
 ```
 
 Navigate to the TNIVO directory:
@@ -37,7 +65,7 @@ python src/main.py
 
 ## Usage
 
-## Organize using Regular Expressions with TNIVO
+### Organize using Regular Expressions with TNIVO
 
 TNIVO allows you to use regular expressions (regex) to filter and organize your files. Regular expressions are a powerful tool for matching patterns in text, which makes them ideal for tasks like this.
 
@@ -59,22 +87,11 @@ Here's a basic guide on how to use them in our application:
 Remember, regular expressions are very powerful, but they can also be quite complex. Make sure to test your regular expression before applying it to your video files.
 
 
-## Revert changes
+### Revert changes
 
 If you wish to revert changes made by TNIVO, you can click the "Reverse" selection active and click "Organize". This will revert previous actions made by TNIVO. 
 **IMPORTANT** -- Revert uses the tnivo.log file to see what changes were made so **do not** delete it unless you're completely certain everything is alright. 
 
-
-## Features
-
-### Directory Selection: Users can select a directory whose files they want to organize.
-### Regular Expression Pattern: Users can input a regular expression pattern to match file names. Files with names that match the pattern will be moved into a subdirectory named after the first group in the pattern.
-### Dry Run: Users can perform a dry run to see what changes would be made without actually making them.
-### Reverse: Users can move files back to the main directory and remove empty subdirectories.
-### Progress Bar: The application displays a progress bar to show the progress of the file organization process.
-### Log Display: The application displays a log of the actions it takes.
-### Theme Selection: Users can select a theme for the application. There are three themes available: Dark, Green, and Light.
-### Regex Profiles: Users can save and load regular expression profiles for later use.
 
 ## Contributing
 
