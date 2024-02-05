@@ -150,6 +150,7 @@ class FileOrganizer(QThread):
 class TNIVOrganizer(QWidget):
     def __init__(self):
         super().__init__()
+        self.organizer = None
         self.config_file = 'config.json'
         self.load_config()  # Load the config first
         self.init_ui()  # Then initialize the UI
