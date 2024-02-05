@@ -201,7 +201,7 @@ class TNIVOrganizer(QWidget):
                 'last_used_directory': '',
                 'regex_profiles': [
                     {'name': 'Default', 'regex': r'^(.*)\..*$'},
-                    {'name': 'Video files', 'regex': r'^(.*)\.(mkv|mp4|avi|mov|wmv|flv|webm|ogv|mpg|m4v|3gp|f4v|mpeg|vob|rm|rmvb|asf|dat|mts|m2ts|ts)$'},
+                    {'name': 'Video files', 'regex': r'^(.*?) - \d{2}\.mkv$'},
                     {'name': 'Text files', 'regex': r'^(.*)\.(txt|doc|docx|odt|pdf)$'},
                     {'name': 'Image files', 'regex': r'^(.*)\.(jpg|jpeg|png|gif|bmp|svg|tiff)$'}
                 ]
@@ -347,6 +347,11 @@ class TNIVOrganizer(QWidget):
         self.remove_button.setToolTip('Remove the currently selected regex profile.')
         self.bottomLayout.addWidget(self.remove_button)
 
+        self.undo_button = QPushButton('Undo Last Action', self)
+        self.undo_button.clicked.connect(self.rollback)
+        self.undo_button.setToolTip('Undo the last organizing action.')
+        self.bottomLayout.addWidget(self.undo_button)
+
         self.dry_run_check = QCheckBox('Dry Run', self)
         self.dry_run_check.setToolTip('Check for a dry run to see what changes would be made without actually making them.')
         self.bottomLayout.addWidget(self.dry_run_check)
@@ -358,6 +363,10 @@ class TNIVOrganizer(QWidget):
         self.organize_inside_folders_check = QCheckBox('Organize inside folders', self)
         self.organize_inside_folders_check.setToolTip('Check this if you want the organizer to organize files inside subdirectories')
         self.bottomLayout.addWidget(self.organize_inside_folders_check)
+
+        self.backup_option_check = QCheckBox('Enable Backup', self)
+        self.backup_option_check.setToolTip('Check this to create a backup of files before organizing.')
+        self.bottomLayout.addWidget(self.backup_option_check)
 
         self.organize_button = QPushButton(QIcon('icons/organize.png'), 'Organize', self)
         self.organize_button.clicked.connect(self.organize)
