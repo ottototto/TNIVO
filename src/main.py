@@ -15,8 +15,25 @@ from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QL
                              QToolTip,QMessageBox)
 from tkinter import messagebox
 
-# Set up logging
-logging.basicConfig(filename='tnivo.log', level=logging.INFO, format='%(asctime)s %(message)s')
+# Define constants for themes
+THEME_DARK = 'Dark'
+THEME_GREEN = 'Green'
+THEME_LIGHT = 'Light'
+
+class Logger:
+    def __init__(self, log_file):
+        self.logger = logging.getLogger('FileOrganizer')
+        self.logger.setLevel(logging.INFO)
+        handler = logging.FileHandler(log_file)
+        handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+        self.logger.addHandler(handler)
+
+    def log_info(self, message):
+        self.logger.info(message)
+
+    def log_error(self, message):
+        self.logger.error(message)
+
 
 class FileOrganizer(QThread):
     progress_signal = pyqtSignal(int)
@@ -28,12 +45,7 @@ class FileOrganizer(QThread):
         self.regex_pattern = regex_pattern
         self.dry_run = dry_run
         self.reverse = reverse
-        # Set up logging
-        self.logger = logging.getLogger('FileOrganizer')
-        self.logger.setLevel(logging.INFO)
-        handler = logging.FileHandler('TNIVO.log')
-        handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
-        self.logger.addHandler(handler)
+        self.logger = Logger('TNIVO.log')
 
     def run(self):
         if self.reverse:
@@ -107,18 +119,18 @@ class FileOrganizer(QThread):
                     log_message = f'Moved file: {source} to {destination}'
                     self.log_signal.emit(log_message)
                     log_entry = {'action': 'move', 'source': source, 'destination': destination, 'timestamp': str(datetime.datetime.now())}
-                    self.logger.info(json.dumps(log_entry))
+                    self.logger.log_info(json.dumps(log_entry))
                 elif action_type == 'remove':
                     if not self.dry_run:
                         os.rmdir(destination)
                     log_message = f'Removed directory: {destination}'
                     self.log_signal.emit(log_message)
                     log_entry = {'action': 'remove', 'destination': destination, 'timestamp': str(datetime.datetime.now())}
-                    self.logger.info(json.dumps(log_entry))
+                    self.logger.log_info(json.dumps(log_entry))
             except Exception as e:
                 error_message = f'Error executing action {action}: {e}'
                 self.log_signal.emit(error_message)
-                self.logger.error(error_message)
+                self.logger.log_error(error_message)
             finally:
                 completed_actions += 1
                 progress_percentage = int((completed_actions / float(total_actions)) * 100)
@@ -248,6 +260,18 @@ class TNIVOrganizer(QWidget):
         # Add new profile to regex_combo
         self.regex_combo.addItem(profile_name)
 
+        # Show a popup message
+        QMessageBox.information(self, "Regex Profile Saved", f"Regex profile {profile_name} saved")
+
+    def delete_profile(self):
+        current_profile = self.regex_combo.currentText()
+        self.config['regex_profiles'] = [profile for profile in self.config['regex_profiles'] if profile['name'] != current_profile]
+        self.save_config()
+        self.update_ui_from_config()
+
+        # Show a popup message
+        QMessageBox.information(self, "Regex Profile Removed", f"Regex profile {current_profile} removed")
+
     def init_ui(self):
         self.setWindowTitle('TNIVO - Totally not involved organizer')
         self.setGeometry(300, 300, 500, 400)
@@ -297,8 +321,14 @@ class TNIVOrganizer(QWidget):
         self.layout.addWidget(self.profile_name_entry)
 
         self.save_button = QPushButton('Save', self)
+        self.save_button.setToolTip('Save the regex profile with the name written above')
         self.save_button.clicked.connect(self.save_profile)
         self.layout.addWidget(self.save_button)
+
+        self.delete_button = QPushButton('Delete', self)
+        self.delete_button.setToolTip('Delete the selecter regex profile in the dropdown menu')
+        self.delete_button.clicked.connect(self.delete_profile)
+        self.layout.addWidget(self.delete_button)
 
         self.dry_run_check = QCheckBox('Dry Run', self)
         self.dry_run_check.setToolTip('Check for a dry run to see what changes would be made without actually making them.')
@@ -347,14 +377,13 @@ class TNIVOrganizer(QWidget):
         self.config['theme'] = current_theme
         self.save_config()
 
-        if current_theme == 'Dark':
-            self.setStyleSheet(self.dark_theme())
-        elif current_theme == 'Green':
-            self.setStyleSheet(self.green_theme())
-        elif current_theme == 'Light':
-            self.setStyleSheet(self.white_theme())
-        else:
-            self.setStyleSheet("")
+        themes = {
+            THEME_DARK: self.dark_theme(),
+            THEME_GREEN: self.green_theme(),
+            THEME_LIGHT: self.white_theme()
+        }
+
+        self.setStyleSheet(themes.get(current_theme, ""))
 
     def browse(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory")
