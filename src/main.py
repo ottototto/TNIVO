@@ -12,7 +12,7 @@ from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QLabel,
                              QLineEdit, QProgressBar, QPushButton, QTextEdit, QVBoxLayout,
                              QWidget,
-                             QToolTip)
+                             QToolTip,QMessageBox)
 from tkinter import messagebox
 
 # Set up logging
@@ -151,9 +151,9 @@ class TNIVOrganizer(QWidget):
     def __init__(self):
         super().__init__()
         self.config_file = 'config.json'
-        self.load_config()
-        self.organizer = None
-        self.init_ui()
+        self.load_config()  # Load the config first
+        self.init_ui()  # Then initialize the UI
+        self.update_ui_from_config()  # Update the UI based on the config
         self.apply_theme_from_config()
         self.apply_theme()
         self.update_regex_from_config()
@@ -172,19 +172,80 @@ class TNIVOrganizer(QWidget):
             self.regex_combo.setCurrentIndex(index)
 
     def load_config(self):
-        try:
+        if os.path.exists(self.config_file):
             with open(self.config_file, 'r') as f:
                 self.config = json.load(f)
-        except FileNotFoundError:
+        else:
             self.config = {
-                'theme': 'Light',
+                'theme': 'Dark',
                 'last_used_directory': '',
-                'regex': 'Default'
+                'regex_profiles': [
+                    {'name': 'Default', 'regex': r'^(.*)\..*$'},
+                    {'name': 'Video files', 'regex': r'^(.*)\.(mkv|mp4|avi|mov|wmv|flv|webm|ogv|mpg|m4v|3gp|f4v|mpeg|vob|rm|rmvb|asf|dat|mts|m2ts|ts)$'},
+                    {'name': 'Text files', 'regex': r'^(.*)\.(txt|doc|docx|odt|pdf)$'},
+                    {'name': 'Image files', 'regex': r'^(.*)\.(jpg|jpeg|png|gif|bmp|svg|tiff)$'}
+                ]
             }
+
+    def update_regex_entry(self, index):
+        # Return early if index is -1
+        if index == -1:
+            return
+
+        # Check if index is within the range of regex_profiles
+        if index < len(self.config['regex_profiles']):
+            # Get the selected profile
+            profile = self.config['regex_profiles'][index]
+
+            # Update regex_entry with the regex of the selected profile
+            self.regex_entry.setText(profile['regex'])
+        else:
+            QMessageBox.critical(self, "Error", "Selected profile does not exist.")
+
+    def update_ui_from_config(self):
+        # Update UI components based on the loaded config
+        theme = self.config.get('theme', 'Light')
+        index = self.theme_combo.findText(theme)
+        if index != -1:
+            self.theme_combo.setCurrentIndex(index)
+            self.apply_theme()
+
+        # Clear regex_combo
+        self.regex_combo.clear()
+
+        # Load regex profiles into regex_combo
+        for profile in self.config['regex_profiles']:
+            self.regex_combo.addItem(profile['name'])
+
+        # Set the current regex profile
+        regex_profile = self.config.get('regex_profiles', [{'name': 'Default'}])[0]['name']
+        index = self.regex_combo.findText(regex_profile)
+        if index != -1:
+            self.regex_combo.setCurrentIndex(index)
 
     def save_config(self):
         with open(self.config_file, 'w') as f:
             json.dump(self.config, f)
+
+    def save_profile(self):
+        profile_name = self.profile_name_entry.text()
+        regex = self.regex_entry.text()
+
+        # Check if profile name already exists
+        for profile in self.config['regex_profiles']:
+            if profile['name'] == profile_name:
+                QMessageBox.critical(self, "Error", "Profile name already exists.")
+                return
+
+        # If no duplicate profile name is found, save the new profile
+        self.config['regex_profiles'].append({
+            'name': profile_name,
+            'regex': regex
+        })
+        self.save_config()  # Save the updated config
+
+        # Add new profile to regex_combo
+        self.regex_combo.addItem(profile_name)
 
     def init_ui(self):
         self.setWindowTitle('TNIVO - Totally not involved organizer')
@@ -206,7 +267,7 @@ class TNIVOrganizer(QWidget):
         self.layout.addWidget(self.directory_label)
 
         self.directory_entry = QLineEdit(self)
-        self.directory_entry.setText(self.config.get('last_used_directory', ''))
+        self.directory_entry.setText(self.config.get('last_used_directory', ''))        
         self.layout.addWidget(self.directory_entry)
 
         self.browse_button = QPushButton(QIcon('icons/browse.png'), 'Browse', self)
@@ -221,10 +282,22 @@ class TNIVOrganizer(QWidget):
         self.regex_combo.addItems(['Default'])
         self.regex_combo.currentIndexChanged.connect(self.update_regex)
         self.layout.addWidget(self.regex_combo)
+        self.regex_combo.currentIndexChanged.connect(self.update_regex_entry)
 
         self.regex_entry = QLineEdit(self)
-        self.regex_entry.setText(r'^(.*)\.(mkv|mp4|avi|mov|wmv|flv|webm|ogv|mpg|m4v|3gp|f4v|mpeg|vob|rm|rmvb|asf|dat|mts|m2ts|ts)$')
+        self.regex_entry.setText(r'^(.*)\..*$')
         self.layout.addWidget(self.regex_entry)
+
+        self.profile_name_label = QLabel('Profile Name:')
+        self.layout.addWidget(self.profile_name_label)
+
+        self.profile_name_entry = QLineEdit(self)
+        self.profile_name_entry.setToolTip('If you want to save regex for later use, you can write a name for the profile here')
+        self.layout.addWidget(self.profile_name_entry)
+
+        self.save_button = QPushButton('Save', self)
+        self.save_button.clicked.connect(self.save_profile)
+        self.layout.addWidget(self.save_button)
 
         self.dry_run_check = QCheckBox('Dry Run', self)
         self.dry_run_check.setToolTip('Check for a dry run to see what changes would be made without actually making them.')
@@ -256,10 +329,11 @@ class TNIVOrganizer(QWidget):
         self.setLayout(self.layout)
 
     def update_regex(self):
+        self.regex_entry.setText('')
         if self.regex_combo.currentText() == 'Default':
-            self.regex_edit.setText(r'^(?:\[Default\] )?(.*?)( - \d+.*|)\.(mkv|mp4|avi)$')
+            self.regex_entry.setText(r'^(?:\[Default\] )?(.*?)( - \d+.*|)\.(mkv|mp4|avi)$')
         else:
-            self.regex_edit.setText('')
+            self.regex_entry.setText('')
 
     def change_theme(self):
         current_theme = self.theme_combo.currentText()

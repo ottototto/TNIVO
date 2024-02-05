@@ -64,6 +64,18 @@ Remember, regular expressions are very powerful, but they can also be quite comp
 If you wish to revert changes made by TNIVO, you can click the "Reverse" selection active and click "Organize". This will revert previous actions made by TNIVO. 
 **IMPORTANT** -- Revert uses the tnivo.log file to see what changes were made so **do not** delete it unless you're completely certain everything is alright. 
 
+
+## Features
+
+### Directory Selection: Users can select a directory whose files they want to organize.
+### Regular Expression Pattern: Users can input a regular expression pattern to match file names. Files with names that match the pattern will be moved into a subdirectory named after the first group in the pattern.
+### Dry Run: Users can perform a dry run to see what changes would be made without actually making them.
+### Reverse: Users can move files back to the main directory and remove empty subdirectories.
+### Progress Bar: The application displays a progress bar to show the progress of the file organization process.
+### Log Display: The application displays a log of the actions it takes.
+### Theme Selection: Users can select a theme for the application. There are three themes available: Dark, Green, and Light.
+### Regex Profiles: Users can save and load regular expression profiles for later use.
+
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.

@@ -1,1 +1,1 @@
-{"theme": "Green", "last_used_directory": "", "regex": "Default"}
+{"theme": "Dark", "last_used_directory": "", "regex_profiles": [{"name": "Default", "regex": "^(.*)\\..*$"}, {"name": "Video files", "regex": "^(.*)\\.(mkv|mp4|avi|mov|wmv|flv|webm|ogv|mpg|m4v|3gp|f4v|mpeg|vob|rm|rmvb|asf|dat|mts|m2ts|ts)$"}, {"name": "Text files", "regex": "^(.*)\\.(txt|doc|docx|odt|pdf)$"}, {"name": "Image files", "regex": "^(.*)\\.(jpg|jpeg|png|gif|bmp|svg|tiff)$"}]}
