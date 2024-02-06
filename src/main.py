@@ -440,7 +440,7 @@ class TNIVOrganizer(QWidget):
         self.bottomLayout.addWidget(self.log_text)
 
         self.clear_log_button = QPushButton(QIcon('icons/clear.png'), 'Clear Log', self)
-        self.clear_log_button.clicked.connect(self.log_text.clear)
+        self.clear_log_button.clicked.connect(self.clear_log)
         self.clear_log_button.setToolTip('Click to clear the log.')
         self.bottomLayout.addWidget(self.clear_log_button)
 
@@ -626,6 +626,14 @@ class TNIVOrganizer(QWidget):
     def log_to_file(self, message):
         with open('organizer.log', 'a') as f:
             f.write(f'{message}\n')
+
+    def clear_log(self):
+        reply = QMessageBox.question(self, 'Clear Log', 'Are you sure you want to clear the log?',
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            open('tnivo.log', 'w').close()  # Clear tnivo.log
+            open('TNIVO_error.log', 'w').close()  # Clear TNIVO_error.log
+            self.log_text.clear()  # Clear the QTextEdit log display
 
     def dark_theme(self):
         return """
