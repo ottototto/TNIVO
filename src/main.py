@@ -10,6 +10,7 @@ from PyQt5.QtGui import QFont, QIcon, QKeySequence
 from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QLabel,
                              QLineEdit, QProgressBar, QPushButton, QTextEdit, QVBoxLayout,
                              QWidget, QAction, QToolTip, QMessageBox, QHBoxLayout)
+from concurrent.futures import ThreadPoolExecutor
 
 # Set up logging
 logging.basicConfig(filename='tnivo.log', level=logging.INFO, format='%(asctime)s %(message)s')
@@ -18,13 +19,14 @@ class FileOrganizer(QThread):
     progress_signal = pyqtSignal(int)
     log_signal = pyqtSignal(str)
 
-    def __init__(self, directory, regex_pattern, dry_run, reverse=False, organize_inside_folders=False):
+    def __init__(self, directory, regex_pattern, dry_run, reverse=False, organize_inside_folders=False, enable_backup=False):
         super().__init__()
         self.directory = directory
         self.regex_pattern = regex_pattern
         self.dry_run = dry_run
         self.reverse = reverse
         self.organize_inside_folders = organize_inside_folders
+        self.enable_backup = enable_backup
         # Set up logging
         self.logger = logging.getLogger('FileOrganizer')
         self.logger.setLevel(logging.INFO)
@@ -33,34 +35,22 @@ class FileOrganizer(QThread):
         self.logger.addHandler(handler)
 
     def run(self):
-        if self.dry_run:
-            self.preview_organize()
-        elif self.reverse:
-            self.reverse_organize()
-        else:
-            self.organize()
-
-    def preview_organize(self):
-        actions = self.prepare_actions()
-        preview_message = "Dry run activated. Below are the actions that would be performed:"
-        self.log_signal.emit(preview_message)
-        for action in actions:
-            if action[0] == 'move':
-                self.log_signal.emit(f'{preview_message.split()[0]}: Move {action[1]} to {action[2]}')
-            elif action[0] == 'remove':
-                self.log_signal.emit(f'{preview_message.split()[0]}: Remove {action[1]}')
-
-    def organize(self):
-        actions = self.prepare_actions()
-        with open(self.transaction_log_path(), 'w') as f:
-            json.dump(actions, f)
+        actions = self.prepare_actions() if not self.reverse else self.prepare_reverse_actions()
+        if self.enable_backup:
+            self.create_backup(actions)
         self.execute_actions(actions)
 
-    def reverse_organize(self):
-        actions = self.prepare_reverse_actions()
-        with open(self.transaction_log_path(), 'w') as f:
-            json.dump(actions, f)
-        self.execute_actions(actions)
+    def create_backup(self, actions):
+        backup_dir = os.path.join(self.directory, 'backup')
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir)
+        with ThreadPoolExecutor() as executor:
+            for action in actions:
+                if action[0] == 'move':
+                    source = action[1]
+                    destination = os.path.join(backup_dir, os.path.basename(source))
+                    executor.submit(shutil.copy, source, destination)
+                    self.log_signal.emit(f'Backup created for {source}')
 
     def prepare_actions(self):
         actions = []
@@ -91,7 +81,13 @@ class FileOrganizer(QThread):
                     actions.append(('move', source, destination))
             for name in dirs:
                 dir_path = os.path.join(root, name)
-                actions.append(('remove', dir_path))
+                if not os.listdir(dir_path):  # Check if the directory is empty
+                    actions.append(('remove', dir_path))
+        # Handle backup removal if enabled
+        if self.enable_backup:
+            backup_dir = os.path.join(self.directory, 'backup')
+            if os.path.exists(backup_dir) and not os.listdir(backup_dir):  # Check if the backup directory is empty
+                actions.append(('remove', backup_dir))
         return actions
     
     def transaction_log_path(self):
@@ -100,36 +96,37 @@ class FileOrganizer(QThread):
     def execute_actions(self, actions):
         total_actions = len(actions)
         completed_actions = 0
-        for action in actions:
-            try:
-                if len(action) == 3:
-                    action_type, source, destination = action
-                else:
-                    action_type, destination = action
+        with ThreadPoolExecutor() as executor:
+            for action in actions:
+                try:
+                    if len(action) == 3:
+                        action_type, source, destination = action
+                    else:
+                        action_type, destination = action
 
-                if action_type == 'move':
-                    if not self.dry_run:
-                        os.makedirs(os.path.dirname(destination), exist_ok=True)
-                        shutil.move(source, destination)
-                    log_message = f'Moved file: {source} to {destination}'
-                    self.log_signal.emit(log_message)
-                    log_entry = {'action': 'move', 'source': source, 'destination': destination, 'timestamp': str(datetime.datetime.now())}
-                    self.logger.info(json.dumps(log_entry))
-                elif action_type == 'remove':
-                    if not self.dry_run:
-                        os.rmdir(destination)
-                    log_message = f'Removed directory: {destination}'
-                    self.log_signal.emit(log_message)
-                    log_entry = {'action': 'remove', 'destination': destination, 'timestamp': str(datetime.datetime.now())}
-                    self.logger.info(json.dumps(log_entry))
-            except Exception as e:
-                error_message = f'Error executing action {action}: {e}'
-                self.log_signal.emit(error_message)
-                self.logger.error(error_message, exc_info=True)
-            finally:
-                completed_actions += 1
-                progress_percentage = int((completed_actions / float(total_actions)) * 100)
-                self.progress_signal.emit(progress_percentage)
+                    if action_type == 'move':
+                        if not self.dry_run:
+                            os.makedirs(os.path.dirname(destination), exist_ok=True)
+                            executor.submit(shutil.move, source, destination)
+                        log_message = f'Moved file: {source} to {destination}'
+                        self.log_signal.emit(log_message)
+                        log_entry = {'action': 'move', 'source': source, 'destination': destination, 'timestamp': str(datetime.datetime.now())}
+                        self.logger.info(json.dumps(log_entry))
+                    elif action_type == 'remove':
+                        if not self.dry_run:
+                            executor.submit(os.rmdir, destination)
+                        log_message = f'Removed directory: {destination}'
+                        self.log_signal.emit(log_message)
+                        log_entry = {'action': 'remove', 'destination': destination, 'timestamp': str(datetime.datetime.now())}
+                        self.logger.info(json.dumps(log_entry))
+                except Exception as e:
+                    error_message = f'Error executing action {action}: {e}'
+                    self.log_signal.emit(error_message)
+                    self.logger.error(error_message, exc_info=True)
+                finally:
+                    completed_actions += 1
+                    progress_percentage = int((completed_actions / float(total_actions)) * 100)
+                    self.progress_signal.emit(progress_percentage)
 
     def rollback(self):
         try:
@@ -138,25 +135,47 @@ class FileOrganizer(QThread):
             # Reverse the order of log entries to rollback in reverse order
             log_entries.reverse()
             for line in log_entries:
-                log_entry = json.loads(line)
-                if log_entry['action'] == 'move':
-                    if os.path.exists(log_entry['destination']):
-                        shutil.move(log_entry['destination'], log_entry['source'])
-                    else:
-                        self.logger.error(f"File {log_entry['destination']} not found. Cannot rollback this action.")
-                elif log_entry['action'] == 'remove':
-                    if not os.path.exists(log_entry['destination']):
-                        os.makedirs(log_entry['destination'], exist_ok=True)
-                    else:
-                        self.logger.error(f"Directory {log_entry['destination']} already exists. Cannot rollback this action.")
+                # Extract JSON part of the log entry
+                json_part = line.split(' - ')[1] if ' - ' in line else None
+                if json_part:
+                    try:
+                        log_entry = json.loads(json_part)
+                        if log_entry['action'] == 'move':
+                            if os.path.exists(log_entry['destination']):
+                                shutil.move(log_entry['destination'], log_entry['source'])
+                                # Check if the source directory is empty after moving and remove it if it is
+                                source_dir = os.path.dirname(log_entry['source'])
+                                if not os.listdir(source_dir):
+                                    os.rmdir(source_dir)
+                                # Check if the destination directory is empty after moving and remove it if it is
+                                destination_dir = os.path.dirname(log_entry['destination'])
+                                if not os.listdir(destination_dir):
+                                    os.rmdir(destination_dir)
+                            else:
+                                self.logger.error(f"File {log_entry['destination']} not found. Cannot rollback this action.")
+                        elif log_entry['action'] == 'remove':
+                            if not os.path.exists(log_entry['destination']):
+                                os.makedirs(log_entry['destination'], exist_ok=True)
+                            else:
+                                self.logger.error(f"Directory {log_entry['destination']} already exists. Cannot rollback this action.")
+                    except json.JSONDecodeError as e:
+                        self.log_signal.emit(f'Error parsing log entry: {e}')
+                        self.logger.error(f'Error parsing log entry: {e}', exc_info=True)
         except Exception as e:
             self.log_signal.emit(f'Error rolling back actions: {e}')
             self.logger.error(f'Error rolling back actions: {e}', exc_info=True)
     
 
 class TNIVOrganizer(QWidget):
+    log_signal = pyqtSignal(str)  # Define log_signal
+
     def __init__(self):
         super().__init__()
+        self.logger = logging.getLogger('TNIVOrganizer')
+        self.logger.setLevel(logging.INFO)
+        handler = logging.FileHandler('TNIVO.log')
+        handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+        self.logger.addHandler(handler)
         icon_path = self.resource_path(os.path.join('assets', 'TNIVO.png'))  # Use self to call the method
         self.setWindowIcon(QIcon(icon_path))
         self.organizer = None
@@ -201,7 +220,7 @@ class TNIVOrganizer(QWidget):
                 'last_used_directory': '',
                 'regex_profiles': [
                     {'name': 'Default', 'regex': r'^(.*)\..*$'},
-                    {'name': 'Video files', 'regex': r'^(.*)\.(mkv|mp4|avi|mov|wmv|flv|webm|ogv|mpg|m4v|3gp|f4v|mpeg|vob|rm|rmvb|asf|dat|mts|m2ts|ts)$'},
+                    {'name': 'Video files', 'regex': r'^(.*?) - \d{2}\.mkv$'},
                     {'name': 'Text files', 'regex': r'^(.*)\.(txt|doc|docx|odt|pdf)$'},
                     {'name': 'Image files', 'regex': r'^(.*)\.(jpg|jpeg|png|gif|bmp|svg|tiff)$'}
                 ]
@@ -347,6 +366,11 @@ class TNIVOrganizer(QWidget):
         self.remove_button.setToolTip('Remove the currently selected regex profile.')
         self.bottomLayout.addWidget(self.remove_button)
 
+        self.undo_button = QPushButton('Undo Last Action', self)
+        self.undo_button.clicked.connect(self.rollback)
+        self.undo_button.setToolTip('Undo the last organizing action.')
+        self.bottomLayout.addWidget(self.undo_button)
+
         self.dry_run_check = QCheckBox('Dry Run', self)
         self.dry_run_check.setToolTip('Check for a dry run to see what changes would be made without actually making them.')
         self.bottomLayout.addWidget(self.dry_run_check)
@@ -358,6 +382,10 @@ class TNIVOrganizer(QWidget):
         self.organize_inside_folders_check = QCheckBox('Organize inside folders', self)
         self.organize_inside_folders_check.setToolTip('Check this if you want the organizer to organize files inside subdirectories')
         self.bottomLayout.addWidget(self.organize_inside_folders_check)
+
+        self.backup_option_check = QCheckBox('Enable Backup', self)
+        self.backup_option_check.setToolTip('Check this to create a backup of files before organizing.')
+        self.bottomLayout.addWidget(self.backup_option_check)
 
         self.organize_button = QPushButton(QIcon('icons/organize.png'), 'Organize', self)
         self.organize_button.clicked.connect(self.organize)
@@ -439,7 +467,8 @@ class TNIVOrganizer(QWidget):
                 self.regex_entry.text(),
                 self.dry_run_check.isChecked(),
                 reverse=self.reverse_check.isChecked(),
-                organize_inside_folders=self.organize_inside_folders_check.isChecked()
+                organize_inside_folders=self.organize_inside_folders_check.isChecked(),
+                enable_backup=self.backup_option_check.isChecked()
             )
             self.organizer.progress_signal.connect(self.update_progress)
             self.organizer.log_signal.connect(self.log_text.append)
@@ -448,6 +477,43 @@ class TNIVOrganizer(QWidget):
             self.log_text.append(f'Error starting organizer: {e}')
             self.log_to_file(f'Error starting organizer: {e}')
 
+    def rollback(self):
+        try:
+            with open('TNIVO.log', 'r') as f:
+                log_entries = f.readlines()
+            # Reverse the order of log entries to rollback in reverse order
+            log_entries.reverse()
+            for line in log_entries:
+                # Extract JSON part of the log entry
+                json_part = line.split(' - ')[1] if ' - ' in line else None
+                if json_part:
+                    try:
+                        log_entry = json.loads(json_part)
+                        if log_entry['action'] == 'move':
+                            if os.path.exists(log_entry['destination']):
+                                shutil.move(log_entry['destination'], log_entry['source'])
+                                # Check if the source directory is empty after moving and remove it if it is
+                                source_dir = os.path.dirname(log_entry['source'])
+                                if not os.listdir(source_dir):
+                                    os.rmdir(source_dir)
+                                # Check if the destination directory is empty after moving and remove it if it is
+                                destination_dir = os.path.dirname(log_entry['destination'])
+                                if not os.listdir(destination_dir):
+                                    os.rmdir(destination_dir)
+                            else:
+                                self.logger.error(f"File {log_entry['destination']} not found. Cannot rollback this action.")
+                        elif log_entry['action'] == 'remove':
+                            if not os.path.exists(log_entry['destination']):
+                                os.makedirs(log_entry['destination'], exist_ok=True)
+                            else:
+                                self.logger.error(f"Directory {log_entry['destination']} already exists. Cannot rollback this action.")
+                    except json.JSONDecodeError as e:
+                        self.log_signal.emit(f'Error parsing log entry: {e}')
+                        self.logger.error(f'Error parsing log entry: {e}', exc_info=True)
+        except Exception as e:
+            self.log_signal.emit(f'Error rolling back actions: {e}')
+            self.logger.error(f'Error rolling back actions: {e}', exc_info=True)
+    
     def update_progress(self, value):
         self.progress.setValue(value)
 
