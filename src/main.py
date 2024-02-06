@@ -202,7 +202,7 @@ class TNIVOrganizer(QWidget):
         self.error_logger.addHandler(error_handler)
         icon_path = self.resource_path(os.path.join('assets', 'TNIVO.png'))  # Use self to call the method
         self.setWindowIcon(QIcon(icon_path))
-        self.organizer = None
+        self.organizer = FileOrganizer(directory="", regex_pattern="", dry_run=False)  # Initialize organizer to avoid NoneType error
         self.config_file = 'config.json'
         self.load_config()  # Load the config first
         self.init_ui()  # Then initialize the UI
@@ -556,7 +556,7 @@ class TNIVOrganizer(QWidget):
                                 if not self.dry_run_check.isChecked():
                                     shutil.move(source_path, destination_path)
                                 self.log_text.append(f'Moved {file} to {folder}')
-                                log_entry = {'action': 'move', 'source': source_path, 'destination': destination_path, 'timestamp': str(datetime.datetime.now())}
+                                log_entry = {'action': 'move', 'source': source_path, 'destination': destination_path, 'timestamp': str(datetime.datetime.now()), 'sequence': self.organizer.action_counter}
                                 self.logger.info(json.dumps(log_entry))
                                 found = True
                                 break
@@ -573,7 +573,7 @@ class TNIVOrganizer(QWidget):
                             if not self.dry_run_check.isChecked():
                                 shutil.move(source_path, destination_path)
                             self.log_text.append(f'Moved {file} to Others')
-                            log_entry = {'action': 'move', 'source': source_path, 'destination': destination_path, 'timestamp': str(datetime.datetime.now())}
+                            log_entry = {'action': 'move', 'source': source_path, 'destination': destination_path, 'timestamp': str(datetime.datetime.now()), 'sequence': self.organizer.action_counter}
                             self.logger.info(json.dumps(log_entry))
         except Exception as e:
             self.log_text.append(f'Error organizing by filetype: {e}')
@@ -734,4 +734,3 @@ if __name__ == '__main__':
     ex = TNIVOrganizer()
     ex.show()
     sys.exit(app.exec_())
-
