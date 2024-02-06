@@ -27,12 +27,19 @@ class FileOrganizer(QThread):
         self.reverse = reverse
         self.organize_inside_folders = organize_inside_folders
         self.enable_backup = enable_backup
-        # Set up logging
-        self.logger = logging.getLogger('FileOrganizer')
-        self.logger.setLevel(logging.INFO)
-        handler = logging.FileHandler('TNIVO.log')
-        handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
-        self.logger.addHandler(handler)
+        # Set up logging for actions
+        self.action_logger = logging.getLogger('FileOrganizerActions')
+        self.action_logger.setLevel(logging.INFO)
+        action_handler = logging.FileHandler('TNIVO.log')
+        action_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+        self.action_logger.addHandler(action_handler)
+        # Set up logging for errors
+        self.error_logger = logging.getLogger('FileOrganizerErrors')
+        self.error_logger.setLevel(logging.ERROR)
+        error_handler = logging.FileHandler('TNIVO_error.log')
+        error_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+        self.error_logger.addHandler(error_handler)
+        self.action_counter = 0
 
     def run(self):
         actions = self.prepare_actions() if not self.reverse else self.prepare_reverse_actions()
@@ -100,6 +107,8 @@ class FileOrganizer(QThread):
     def execute_actions(self, actions):
         total_actions = len(actions)
         completed_actions = 0
+        self.action_counter += 1
+        action_sequence = self.action_counter
         with ThreadPoolExecutor() as executor:
             for action in actions:
                 try:
@@ -114,19 +123,19 @@ class FileOrganizer(QThread):
                             executor.submit(shutil.move, source, destination)
                         log_message = f'Moved file: {source} to {destination}'
                         self.log_signal.emit(log_message)
-                        log_entry = {'action': 'move', 'source': source, 'destination': destination, 'timestamp': str(datetime.datetime.now())}
-                        self.logger.info(json.dumps(log_entry))
+                        log_entry = {'action': 'move', 'source': source, 'destination': destination, 'timestamp': str(datetime.datetime.now()), 'sequence': action_sequence}
+                        self.action_logger.info(json.dumps(log_entry))
                     elif action_type == 'remove':
                         if not self.dry_run:
                             executor.submit(os.rmdir, destination)
                         log_message = f'Removed directory: {destination}'
                         self.log_signal.emit(log_message)
-                        log_entry = {'action': 'remove', 'destination': destination, 'timestamp': str(datetime.datetime.now())}
-                        self.logger.info(json.dumps(log_entry))
+                        log_entry = {'action': 'remove', 'destination': destination, 'timestamp': str(datetime.datetime.now()), 'sequence': action_sequence}
+                        self.action_logger.info(json.dumps(log_entry))
                 except Exception as e:
                     error_message = f'Error executing action {action}: {e}'
                     self.log_signal.emit(error_message)
-                    self.logger.error(error_message, exc_info=True)
+                    self.error_logger.error(error_message, exc_info=True)
                 finally:
                     completed_actions += 1
                     progress_percentage = int((completed_actions / float(total_actions)) * 100)
@@ -138,12 +147,17 @@ class FileOrganizer(QThread):
                 log_entries = f.readlines()
             # Reverse the order of log entries to rollback in reverse order
             log_entries.reverse()
+            last_sequence = None
             for line in log_entries:
                 # Extract JSON part of the log entry
                 json_part = line.split(' - ')[1] if ' - ' in line else None
                 if json_part:
                     try:
                         log_entry = json.loads(json_part)
+                        if last_sequence is None:
+                            last_sequence = log_entry.get('sequence')
+                        if log_entry.get('sequence') != last_sequence:
+                            break
                         if log_entry['action'] == 'move':
                             if os.path.exists(log_entry['destination']):
                                 shutil.move(log_entry['destination'], log_entry['source'])
@@ -156,18 +170,18 @@ class FileOrganizer(QThread):
                                 if not os.listdir(destination_dir):
                                     os.rmdir(destination_dir)
                             else:
-                                self.logger.error(f"File {log_entry['destination']} not found. Cannot rollback this action.")
+                                self.error_logger.error(f"File {log_entry['destination']} not found. Cannot rollback this action.")
                         elif log_entry['action'] == 'remove':
                             if not os.path.exists(log_entry['destination']):
                                 os.makedirs(log_entry['destination'], exist_ok=True)
                             else:
-                                self.logger.error(f"Directory {log_entry['destination']} already exists. Cannot rollback this action.")
+                                self.error_logger.error(f"Directory {log_entry['destination']} already exists. Cannot rollback this action.")
                     except json.JSONDecodeError as e:
                         self.log_signal.emit(f'Error parsing log entry: {e}')
-                        self.logger.error(f'Error parsing log entry: {e}', exc_info=True)
+                        self.error_logger.error(f'Error parsing log entry: {e}', exc_info=True)
         except Exception as e:
             self.log_signal.emit(f'Error rolling back actions: {e}')
-            self.logger.error(f'Error rolling back actions: {e}', exc_info=True)
+            self.error_logger.error(f'Error rolling back actions: {e}', exc_info=True)
     
 
 class TNIVOrganizer(QWidget):
@@ -180,6 +194,12 @@ class TNIVOrganizer(QWidget):
         handler = logging.FileHandler('TNIVO.log')
         handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
         self.logger.addHandler(handler)
+        # Set up error logging
+        self.error_logger = logging.getLogger('TNIVOrganizerErrors')
+        self.error_logger.setLevel(logging.ERROR)
+        error_handler = logging.FileHandler('TNIVO_error.log')
+        error_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+        self.error_logger.addHandler(error_handler)
         icon_path = self.resource_path(os.path.join('assets', 'TNIVO.png'))  # Use self to call the method
         self.setWindowIcon(QIcon(icon_path))
         self.organizer = None
@@ -536,6 +556,8 @@ class TNIVOrganizer(QWidget):
                                 if not self.dry_run_check.isChecked():
                                     shutil.move(source_path, destination_path)
                                 self.log_text.append(f'Moved {file} to {folder}')
+                                log_entry = {'action': 'move', 'source': source_path, 'destination': destination_path, 'timestamp': str(datetime.datetime.now())}
+                                self.logger.info(json.dumps(log_entry))
                                 found = True
                                 break
                         if not found:
@@ -551,6 +573,8 @@ class TNIVOrganizer(QWidget):
                             if not self.dry_run_check.isChecked():
                                 shutil.move(source_path, destination_path)
                             self.log_text.append(f'Moved {file} to Others')
+                            log_entry = {'action': 'move', 'source': source_path, 'destination': destination_path, 'timestamp': str(datetime.datetime.now())}
+                            self.logger.info(json.dumps(log_entry))
         except Exception as e:
             self.log_text.append(f'Error organizing by filetype: {e}')
 
@@ -560,12 +584,17 @@ class TNIVOrganizer(QWidget):
                 log_entries = f.readlines()
             # Reverse the order of log entries to rollback in reverse order
             log_entries.reverse()
+            last_sequence = None
             for line in log_entries:
                 # Extract JSON part of the log entry
                 json_part = line.split(' - ')[1] if ' - ' in line else None
                 if json_part:
                     try:
                         log_entry = json.loads(json_part)
+                        if last_sequence is None:
+                            last_sequence = log_entry.get('sequence')
+                        if log_entry.get('sequence') != last_sequence:
+                            break
                         if log_entry['action'] == 'move':
                             if os.path.exists(log_entry['destination']):
                                 shutil.move(log_entry['destination'], log_entry['source'])
@@ -578,18 +607,18 @@ class TNIVOrganizer(QWidget):
                                 if not os.listdir(destination_dir):
                                     os.rmdir(destination_dir)
                             else:
-                                self.logger.error(f"File {log_entry['destination']} not found. Cannot rollback this action.")
+                                self.error_logger.error(f"File {log_entry['destination']} not found. Cannot rollback this action.")
                         elif log_entry['action'] == 'remove':
                             if not os.path.exists(log_entry['destination']):
                                 os.makedirs(log_entry['destination'], exist_ok=True)
                             else:
-                                self.logger.error(f"Directory {log_entry['destination']} already exists. Cannot rollback this action.")
+                                self.error_logger.error(f"Directory {log_entry['destination']} already exists. Cannot rollback this action.")
                     except json.JSONDecodeError as e:
                         self.log_signal.emit(f'Error parsing log entry: {e}')
-                        self.logger.error(f'Error parsing log entry: {e}', exc_info=True)
+                        self.error_logger.error(f'Error parsing log entry: {e}', exc_info=True)
         except Exception as e:
             self.log_signal.emit(f'Error rolling back actions: {e}')
-            self.logger.error(f'Error rolling back actions: {e}', exc_info=True)
+            self.error_logger.error(f'Error rolling back actions: {e}', exc_info=True)
     
     def update_progress(self, value):
         self.progress.setValue(value)

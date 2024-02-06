@@ -10,3 +10,6 @@ New-Item -ItemType Directory -Force -Path sort_testing/Folderwithfiles
 New-Item -ItemType File -Force -Path sort_testing/Folderwithfiles/boot.avi
 New-Item -ItemType File -Force -Path sort_testing/Folderwithfiles/container.docx
 New-Item -ItemType File -Force -Path sort_testing/Folderwithfiles/file.jpg
+
+Remove-Item -Force ./TNIVO.log
+Remove-Item -Force ./TNIVO_error.log
