@@ -36,6 +36,10 @@ class FileOrganizer(QThread):
 
     def run(self):
         actions = self.prepare_actions() if not self.reverse else self.prepare_reverse_actions()
+        if self.reverse:
+            # Execute reverse actions twice to ensure leftover folders are removed
+            self.execute_actions(actions)
+            self.execute_actions(actions)  # Execute reverse actions a second time
         if self.enable_backup:
             self.create_backup(actions)
         self.execute_actions(actions)
@@ -270,6 +274,10 @@ class TNIVOrganizer(QWidget):
         profile_name = self.profile_name_entry.text()
         regex = self.regex_entry.text()
 
+        if not profile_name.strip():
+            QMessageBox.warning(self, "Empty Profile Name", "Please write a profile name before saving.")
+            return
+
         # Check if profile name already exists
         for profile in self.config['regex_profiles']:
             if profile['name'] == profile_name:
@@ -356,20 +364,17 @@ class TNIVOrganizer(QWidget):
         self.profile_name_entry.setToolTip('If you want to save regex for later use, you can write a name for the profile here')
         self.bottomLayout.addWidget(self.profile_name_entry)
 
+        self.profileButtonLayout = QHBoxLayout()
         self.save_button = QPushButton('Save', self)
         self.save_button.clicked.connect(self.save_profile)
         self.save_button.setToolTip('Save the current regex as a new profile for future use.')
-        self.bottomLayout.addWidget(self.save_button)
+        self.profileButtonLayout.addWidget(self.save_button)
 
         self.remove_button = QPushButton('Remove', self)
         self.remove_button.clicked.connect(self.remove_profile)
         self.remove_button.setToolTip('Remove the currently selected regex profile.')
-        self.bottomLayout.addWidget(self.remove_button)
-
-        self.undo_button = QPushButton('Undo Last Action', self)
-        self.undo_button.clicked.connect(self.rollback)
-        self.undo_button.setToolTip('Undo the last organizing action.')
-        self.bottomLayout.addWidget(self.undo_button)
+        self.profileButtonLayout.addWidget(self.remove_button)
+        self.bottomLayout.addLayout(self.profileButtonLayout)
 
         self.dry_run_check = QCheckBox('Dry Run', self)
         self.dry_run_check.setToolTip('Check for a dry run to see what changes would be made without actually making them.')
@@ -387,10 +392,22 @@ class TNIVOrganizer(QWidget):
         self.backup_option_check.setToolTip('Check this to create a backup of files before organizing.')
         self.bottomLayout.addWidget(self.backup_option_check)
 
+        self.organizeButtonLayout = QHBoxLayout()
         self.organize_button = QPushButton(QIcon('icons/organize.png'), 'Organize', self)
         self.organize_button.clicked.connect(self.organize)
         self.organize_button.setToolTip('Click to organize the files based on the specified regex pattern.')
-        self.bottomLayout.addWidget(self.organize_button)
+        self.organizeButtonLayout.addWidget(self.organize_button)
+
+        self.organize_by_filetype_button = QPushButton('Organize by Filetype', self)
+        self.organize_by_filetype_button.clicked.connect(self.organize_by_filetype)
+        self.organize_by_filetype_button.setToolTip('Organize files into folders based on their filetype. No need to write or understand regex if you want to use this')
+        self.organizeButtonLayout.addWidget(self.organize_by_filetype_button)
+        self.bottomLayout.addLayout(self.organizeButtonLayout)
+
+        self.undo_button = QPushButton('Undo Last Action', self)
+        self.undo_button.clicked.connect(self.rollback)
+        self.undo_button.setToolTip('Undo the last organizing action.')
+        self.bottomLayout.addWidget(self.undo_button)
 
         self.progress = QProgressBar(self)
         self.bottomLayout.addWidget(self.progress)  # Added QProgressBar to the layout as per instructions
@@ -476,6 +493,66 @@ class TNIVOrganizer(QWidget):
         except Exception as e:
             self.log_text.append(f'Error starting organizer: {e}')
             self.log_to_file(f'Error starting organizer: {e}')
+
+    def organize_by_filetype(self):
+        directory = self.directory_entry.text()
+        if not directory:
+            self.log_text.append('No directory selected.')
+            return
+
+        file_mappings = {
+            'Images': ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'tiff', 'ico', 'webp'],
+            'Videos': ['mp4', 'mkv', 'flv', 'avi', 'mov', 'wmv', 'mpg', 'mpeg', 'm4v', 'h264'],
+            'Documents': ['doc', 'docx', 'pdf', 'txt', 'odt', 'xls', 'xlsx', 'ppt', 'pptx', 'odp', 'ods', 'odt', 'rtf'],
+            'Music': ['mp3', 'wav', 'aac', 'flac', 'ogg', 'wma', 'm4a', 'aiff'],
+            'Archives': ['zip', 'rar', '7z', 'gz', 'tar', 'bz2', 'tar.gz', 'tgz'],
+            'Code': ['py', 'js', 'html', 'css', 'java', 'cpp', 'c', 'sh', 'bat', 'php', 'sql', 'rb', 'swift'],
+            'eBooks': ['epub', 'mobi', 'azw', 'prc', 'pdf'],
+            'Others': []
+        }
+
+        if self.backup_option_check.isChecked():
+            backup_dir = os.path.join(directory, 'backup')
+            if not os.path.exists(backup_dir):
+                os.makedirs(backup_dir)
+
+        try:
+            for root, dirs, files in os.walk(directory):
+                if root == directory or self.organize_inside_folders_check.isChecked():
+                    for file in files:
+                        ext = file.split('.')[-1].lower()
+                        found = False
+                        for folder, extensions in file_mappings.items():
+                            if ext in extensions:
+                                destination_folder = os.path.join(directory, folder)
+                                if not os.path.exists(destination_folder):
+                                    os.makedirs(destination_folder)
+                                source_path = os.path.join(root, file)
+                                destination_path = os.path.join(destination_folder, file)
+                                if self.backup_option_check.isChecked():
+                                    backup_path = os.path.join(backup_dir, os.path.basename(source_path))
+                                    shutil.copy(source_path, backup_path)
+                                    self.log_text.append(f'Backup created for {file}')
+                                if not self.dry_run_check.isChecked():
+                                    shutil.move(source_path, destination_path)
+                                self.log_text.append(f'Moved {file} to {folder}')
+                                found = True
+                                break
+                        if not found:
+                            destination_folder = os.path.join(directory, 'Others')
+                            if not os.path.exists(destination_folder):
+                                os.makedirs(destination_folder)
+                            source_path = os.path.join(root, file)
+                            destination_path = os.path.join(destination_folder, file)
+                            if self.backup_option_check.isChecked():
+                                backup_path = os.path.join(backup_dir, os.path.basename(source_path))
+                                shutil.copy(source_path, backup_path)
+                                self.log_text.append(f'Backup created for {file}')
+                            if not self.dry_run_check.isChecked():
+                                shutil.move(source_path, destination_path)
+                            self.log_text.append(f'Moved {file} to Others')
+        except Exception as e:
+            self.log_text.append(f'Error organizing by filetype: {e}')
 
     def rollback(self):
         try:
@@ -577,7 +654,7 @@ class TNIVOrganizer(QWidget):
             QProgressBar {
                 border: 2px solid #A5D6A7;
                 border-radius: 5px;
-                text-align: center;
+                text-align: center.
             }
             QProgressBar::chunk {
                 background-color: #81C784;
@@ -611,7 +688,7 @@ class TNIVOrganizer(QWidget):
             QProgressBar {
                 border: 2px solid #CCC;
                 border-radius: 5px;
-                text-align: center;
+                text-align: center.
             }
             QProgressBar::chunk {
                 background-color: #DDD;
