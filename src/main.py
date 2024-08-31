@@ -153,6 +153,7 @@ class OrganizeByFiletypeTask(QRunnable):
         self.organizer = organizer
         self.directory = directory
         self.file_mappings = file_mappings
+        self.backup_dir = os.path.join(directory, 'backup') if self.organizer.filetype_backup_option_check.isChecked() else None
 
     def run(self):
         try:
@@ -169,7 +170,7 @@ class OrganizeByFiletypeTask(QRunnable):
                                 if not os.path.exists(destination_folder):
                                     os.makedirs(destination_folder)
                                 source_path = os.path.join(root, file)
-                                self.organizer.move_file(source_path, destination_folder, file)
+                                self.organizer.move_file(source_path, destination_folder, file, self.backup_dir)
                                 found = True
                                 break
                         if not found:
@@ -177,7 +178,7 @@ class OrganizeByFiletypeTask(QRunnable):
                             if not os.path.exists(destination_folder):
                                 os.makedirs(destination_folder)
                             source_path = os.path.join(root, file)
-                            self.organizer.move_file(source_path, destination_folder, file)
+                            self.organizer.move_file(source_path, destination_folder, file, self.backup_dir)
                         processed_files += 1
                         progress = int((processed_files / total_files) * 100)
                         self.organizer.progress_signal.emit(progress)
@@ -241,7 +242,7 @@ class TNIVOrganizer(QWidget):
                 'theme': 'Dark',
                 'last_used_directory': '',
                 'regex_profiles': [
-                    {'name': 'Default', 'regex': r'^(.*)\..*$'},
+                    {'name': 'Default', 'regex': r'^(?:\[Default\] )?(.*?)( - \d+.*|)\.(mkv|mp4|avi)$'},
                     {'name': 'Video files', 'regex': r'^(.*?) - \d{2}\.mkv$'},
                     {'name': 'Text files', 'regex': r'^(.*)\.(txt|doc|docx|odt|pdf)$'},
                     {'name': 'Image files', 'regex': r'^(.*)\.(jpg|jpeg|png|gif|bmp|svg|tiff)$'}
@@ -270,6 +271,7 @@ class TNIVOrganizer(QWidget):
         index = self.regex_combo.findText(regex_profile)
         if index != -1:
             self.regex_combo.setCurrentIndex(index)
+        self.update_regex_entry(0)
 
     def save_config(self):
         with open(self.config_file, 'w') as f:
@@ -403,7 +405,7 @@ class TNIVOrganizer(QWidget):
         regex_combo_layout = QHBoxLayout()
         self.regex_combo = QComboBox()
         self.regex_combo.addItems(['Default'])
-        self.regex_combo.currentIndexChanged.connect(self.update_regex)
+        self.regex_combo.currentIndexChanged.connect(self.update_regex_entry)
         regex_combo_layout.addWidget(QLabel("Regex Profile:"))
         regex_combo_layout.addWidget(self.regex_combo)
         regex_layout.addLayout(regex_combo_layout)
@@ -546,11 +548,12 @@ class TNIVOrganizer(QWidget):
             self.log_text.append(f'Error starting organizer: {e}')
             self.log_to_file(f'Error starting organizer: {e}')
 
-    def move_file(self, source_path: str, destination_folder: str, file: str):
+    def move_file(self, source_path: str, destination_folder: str, file: str, backup_dir: str = None):
         destination_path = os.path.join(destination_folder, file)
-        if self.backup_option_check.isChecked():
-            backup_path = os.path.join(self.backup_dir, os.path.basename(source_path))
-            shutil.copy(source_path, backup_path)
+        if backup_dir:
+            backup_path = os.path.join(backup_dir, os.path.relpath(source_path, self.directory_entry.text()))
+            os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+            shutil.copy2(source_path, backup_path)
             self.log_text.append(f'Backup created for {file}')
         if not self.dry_run_check.isChecked():
             shutil.move(source_path, destination_path)
@@ -585,11 +588,6 @@ class TNIVOrganizer(QWidget):
             'Backup_Files': ['bak', 'old', 'backup'],
             'Others': []
         }
-
-        if self.filetype_backup_option_check.isChecked():
-            self.backup_dir = os.path.join(directory, 'backup')
-            if not os.path.exists(self.backup_dir):
-                os.makedirs(self.backup_dir)
 
         task = OrganizeByFiletypeTask(self, directory, file_mappings)
         self.threadpool.start(task)
