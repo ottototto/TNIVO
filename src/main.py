@@ -565,13 +565,24 @@ class TNIVOrganizer(QWidget):
             return
 
         file_mappings = {
-            'Images': ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'tiff', 'ico', 'webp'],
-            'Videos': ['mp4', 'mkv', 'flv', 'avi', 'mov', 'wmv', 'mpg', 'mpeg', 'm4v', 'h264'],
-            'Documents': ['doc', 'docx', 'pdf', 'txt', 'odt', 'xls', 'xlsx', 'ppt', 'pptx', 'odp', 'ods', 'odt', 'rtf'],
-            'Music': ['mp3', 'wav', 'aac', 'flac', 'ogg', 'wma', 'm4a', 'aiff'],
-            'Archives': ['zip', 'rar', '7z', 'gz', 'tar', 'bz2', 'tar.gz', 'tgz'],
-            'Code': ['py', 'js', 'html', 'css', 'java', 'cpp', 'c', 'sh', 'bat', 'php', 'sql', 'rb', 'swift'],
-            'eBooks': ['epub', 'mobi', 'azw', 'prc', 'pdf'],
+            'Images': ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'tiff', 'tif', 'ico', 'webp', 'raw', 'cr2', 'nef', 'arw', 'dng', 'heic', 'psd', 'ai', 'eps'],
+            'Videos': ['mp4', 'mkv', 'flv', 'avi', 'mov', 'wmv', 'mpg', 'mpeg', 'm4v', 'h264', 'webm', '3gp', 'ogv', 'vob', 'ts', 'm2ts', 'mts'],
+            'Documents': ['doc', 'docx', 'pdf', 'txt', 'rtf', 'odt', 'xls', 'xlsx', 'ods', 'ppt', 'pptx', 'odp', 'csv', 'tsv', 'md', 'tex', 'log', 'json', 'xml', 'yml', 'yaml'],
+            'Audio': ['mp3', 'wav', 'aac', 'flac', 'ogg', 'wma', 'm4a', 'aiff', 'alac', 'ape', 'opus', 'mid', 'midi'],
+            'Archives': ['zip', 'rar', '7z', 'gz', 'tar', 'bz2', 'xz', 'tar.gz', 'tgz', 'tar.bz2', 'tar.xz', 'iso'],
+            'Code': ['py', 'js', 'html', 'css', 'java', 'cpp', 'c', 'h', 'hpp', 'cs', 'sh', 'bat', 'ps1', 'php', 'sql', 'rb', 'swift', 'go', 'rs', 'ts', 'jsx', 'vue', 'kt', 'scala', 'pl', 'lua', 'r'],
+            'eBooks': ['epub', 'mobi', 'azw', 'azw3', 'prc', 'pdf', 'djvu', 'fb2', 'lit', 'lrf'],
+            'Executables': ['exe', 'msi', 'app', 'dmg', 'deb', 'rpm', 'apk', 'ipa'],
+            'Fonts': ['ttf', 'otf', 'woff', 'woff2', 'eot'],
+            'Databases': ['db', 'sqlite', 'sqlite3', 'mdb', 'accdb'],
+            '3D_Models': ['obj', 'fbx', 'stl', 'blend', 'dae', '3ds', 'max'],
+            'CAD': ['dwg', 'dxf', 'step', 'stp', 'iges', 'igs'],
+            'Spreadsheets': ['xls', 'xlsx', 'ods', 'csv', 'tsv'],
+            'Presentations': ['ppt', 'pptx', 'odp', 'key'],
+            'Vector_Graphics': ['svg', 'ai', 'eps', 'cdr'],
+            'Disk_Images': ['iso', 'img', 'vhd', 'vmdk'],
+            'Config_Files': ['ini', 'cfg', 'conf', 'config'],
+            'Backup_Files': ['bak', 'old', 'backup'],
             'Others': []
         }
 
