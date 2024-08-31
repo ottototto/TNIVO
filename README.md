@@ -1,98 +1,105 @@
 # TNIVO File Organizer
+
 Totally not involved file organizer
 
-TNIVO is a powerful and easy-to-use file organizer. It helps you manage your files efficiently and easily with a user-friendly interface.
+TNIVO is a powerful and easy-to-use file organizer. It helps you manage your files efficiently with a user-friendly interface.
 
+## Table of Contents
 
-# Table of Contents
-1. [Features](#Features)
-2. [Getting Started](#installation)
-3. [How to Use](#Usage)
+1. [Features](#features)
+2. [Installation](#installation)
+3. [Usage](#usage)
 4. [Contributing](#contributing)
 5. [License](#license)
 
 ## Features
 
+### Two Organization Modes
+
+- **Regex Sorting**: Organize files using custom regular expression patterns.
+- **Sort by Filetype**: Quickly organize files based on their extensions.
+
 ### Directory Selection
-Users can select a directory whose files they want to organize. This allows for targeted file organization within specific folders.
+
+Select a specific directory to organize, allowing for targeted file management.
 
 ### Regular Expression Pattern
-Users can input a regular expression pattern to match file names. Files with names that match the pattern will be moved into a subdirectory named after the first group in the pattern. This provides a flexible way to categorize and organize files.
 
-### Dry Run
-Users can perform a dry run to see what changes would be made without actually making them. This feature provides a safety net to prevent unwanted file organization.
-
-### Reverse
-Users can move files back to the main directory and remove empty subdirectories. This feature allows users to undo the file organization if needed.
-
-### Progress Bar
-The application displays a progress bar to show the progress of the file organization process. This gives users a visual representation of the task progress.
-
-### Log Display
-The application displays a log of the actions it takes. This provides a detailed record of the file organization process for auditing purposes.
-
-### Theme Selection
-Users can select a theme for the application. There are three themes available: Dark, Green, and Light. This feature allows users to customize the look and feel of the application.
+Input custom regex patterns to match file names. Matching files are moved into subdirectories named after the first capture group.
 
 ### Regex Profiles
-Users can save and load regular expression profiles for later use. This feature allows users to reuse regular expression patterns, saving time and effort in inputting complex patterns.
 
+Save and load regular expression profiles for quick access to frequently used patterns.
+
+### Dry Run
+
+Preview changes without altering files, providing a safety net against unwanted modifications.
+
+### Reverse Operation
+
+Undo previous organization actions, moving files back to their original locations.
+
+### Progress Tracking
+
+- **Progress Bar**: Visual representation of the organization process.
+- **Log Display**: Detailed record of actions taken during file organization.
+
+### Customization
+
+- **Theme Selection**: Choose between Dark, Green, and Light themes for a personalized experience.
+- **Organize Inside Folders**: Option to apply organization rules to subdirectories.
+- **Backup Option**: Create backups of files before organizing.
 
 ## Installation
 
-Clone the repository:
+1. Clone the repository:
 
-```bash
-git clone https://github.com/ottototto/TNIVO.git
-```
+   ```bash
+   git clone https://github.com/ottototto/TNIVO.git
+   ```
 
-Navigate to the TNIVO directory:
+2. Navigate to the TNIVO directory:
 
-```bash
-cd TNIVO
-```
+   ```bash
+   cd TNIVO
+   ```
 
-Start the application:
+3. Start the application:
+   ```bash
+   python src/main.py
+   ```
 
-```bash
-python src/main.py
-```
-
-<b><a href="https://github.com/ottototto/TNIVO/releases">You can also just download the Exe from releases and launch that.</a></b>
+**Alternative**: Download the executable from the [releases page](https://github.com/ottototto/TNIVO/releases) for a quick start.
 
 ## Usage
 
-### Organize using Regular Expressions with TNIVO
+### Regex Sorting Mode
 
-TNIVO allows you to use regular expressions (regex) to filter and organize your files. Regular expressions are a powerful tool for matching patterns in text, which makes them ideal for tasks like this.
+1. Select "Regex Sorting" from the mode dropdown.
+2. Choose a directory to organize.
+3. Enter a regex pattern or select a saved profile.
+4. (Optional) Enable additional options like Dry Run or Backup.
+5. Click "Organize" to start the process.
 
-Here's a basic guide on how to use them in our application:
+Example regex: `^vacation.*\.mp4$` matches all files starting with 'vacation' and ending with '.mp4'.
 
-1. **Access the regex input field**: This is where you'll enter your regular expression. The application will use this to match video file names.
+### Sort by Filetype Mode
 
-2. **Write your regular expression**: If, for example, you want to match all files that start with 'vacation' and end with '.mp4', your regex would be `^vacation.*\.mp4$`.
+1. Select "Sort by Filetype" from the mode dropdown.
+2. Choose a directory to organize.
+3. (Optional) Enable the backup option.
+4. Click "Organize by Filetype" to start the process.
 
-   - `^` denotes the start of the line.
-   - `vacation` is the exact text we want to match at the start of the file name.
-   - `.*` matches any character (.) any number of times (\*).
-   - `\.` matches the dot before the file extension. The backslash is necessary because a dot has a special meaning in regex, and the backslash 'escapes' this special meaning.
-   - `mp4` is the exact text we want to match at the end of the file name.
-   - `$` denotes the end of the line.
+### Reverting Changes
 
-3. **Apply the filter**: After entering your regex, you can click Organize and the application will then organize your files based on the matches.
+1. Enable the "Reverse" option.
+2. Click "Organize" to undo previous actions.
 
-Remember, regular expressions are very powerful, but they can also be quite complex. Make sure to test your regular expression before applying it to your video files.
-
-
-### Revert changes
-
-If you wish to revert changes made by TNIVO, you can click the "Reverse" selection active and click "Organize". This will revert previous actions made by TNIVO. 
-**IMPORTANT** -- Revert uses the tnivo.log file to see what changes were made so **do not** delete it unless you're completely certain everything is alright. 
-
+**Note**: The reversal process relies on the tnivo.log file. Do not delete this file unless you're certain all changes are satisfactory.
 
 ## Contributing
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+We welcome pull requests. For major changes, please open an issue first to discuss your proposed modifications.
 
 ## License
 
