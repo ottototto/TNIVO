@@ -26,10 +26,10 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --add-data "assets;assets" --icon=assets/TNIVO.ico src/main.py
+          pyinstaller --onefile --windowed --add-data "assets;assets" --icon=assets/TNIVO.ico --name TNIVO src/main.py
 
       - name: Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create v${{ github.run_number }} ./dist/main.exe --title "Release ${{ github.run_number }}" --notes "Automated release ${{ github.run_number }}" --generate-notes
+          gh release create v${{ github.run_number }} ./dist/TNIVO.exe --title "Release ${{ github.run_number }}" --notes "Automated release ${{ github.run_number }}" --generate-notes
