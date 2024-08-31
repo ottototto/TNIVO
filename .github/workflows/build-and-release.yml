@@ -24,7 +24,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --add-data "assets;assets" --icon=assets/TNIVO.png src/main.py
+          pyinstaller --onefile --windowed --add-data "assets;assets" --icon=assets/TNIVO.ico src/main.py
 
       - name: Create Release
         id: create_release
